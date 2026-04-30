@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#5b6e5a">
+  <title>Untangle · Coming soon</title>
+  <style>
+    :root {
+      --cream: #faf6ef;
+      --paper: #ffffff;
+      --sage: #5b6e5a;
+      --sage-deep: #3d4d3c;
+      --sage-faint: #e7ede2;
+      --gold: #c9985c;
+      --terracotta: #c97064;
+      --ink: #2a2a2e;
+      --ink-soft: #6b6b73;
+      --ink-faint: #a0a0a8;
+      --sand: #e8e1d0;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root { --cream:#1a1812; --paper:#25221c; --ink:#ece8df; --ink-soft:#b0aca0; --ink-faint:#76726a; --sand:#34302a; --sage-faint:#2c352b; }
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; min-height: 100vh; background: var(--cream); color: var(--ink); font-family: -apple-system, BlinkMacSystemFont, 'Inter', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+    .wrap { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 32px 20px; text-align: center; }
+    .icon { width: 80px; height: 80px; color: var(--sage); margin-bottom: 24px; }
+    .eyebrow { font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--ink-faint); font-weight: 600; margin-bottom: 12px; }
+    h1 { font-family: 'Iowan Old Style', 'Charter', 'Georgia', serif; font-size: 42px; font-weight: 600; letter-spacing: -0.02em; margin: 0 0 12px; color: var(--ink); line-height: 1.1; }
+    p { color: var(--ink-soft); font-size: 16px; line-height: 1.55; max-width: 420px; margin: 0 0 16px; }
+    .quote { font-style: italic; color: var(--ink-soft); font-size: 14px; max-width: 380px; margin-top: 20px; padding: 16px 20px; background: var(--sage-faint); border-radius: 16px; line-height: 1.5; }
+    .links { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 32px; }
+    .link-card { display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; background: var(--paper); border: 1px solid var(--sand); border-radius: 999px; text-decoration: none; color: var(--ink); font-size: 14px; font-weight: 500; transition: transform 200ms, border-color 200ms; }
+    .link-card:hover { border-color: var(--sage); transform: translateY(-1px); }
+    .link-card .dot { width: 8px; height: 8px; border-radius: 50%; }
+    .link-card .dot.sage { background: var(--sage); }
+    .link-card .dot.gold { background: var(--gold); }
+    .link-card .dot.terracotta { background: var(--terracotta); }
+    .footer { margin-top: 40px; font-size: 12px; color: var(--ink-faint); }
+    .webbybrain { font-family: 'Iowan Old Style', serif; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <svg class="icon" viewBox="0 0 64 64" fill="none">
+      <path d="M44 16c-3 0-6 1-8 3-3-3-7-4-11-3-6 1-9 6-9 11 0 3 2 6 4 8-1 2 0 5 2 6 1 4 5 6 9 6h22c5 0 9-4 9-9 0-2-1-5-3-6 1-2 0-5-2-6-1-6-7-10-13-10z" fill="currentColor" opacity="0.18"/>
+      <path d="M44 16c-3 0-6 1-8 3-3-3-7-4-11-3-6 1-9 6-9 11 0 3 2 6 4 8-1 2 0 5 2 6 1 4 5 6 9 6h22c5 0 9-4 9-9 0-2-1-5-3-6 1-2 0-5-2-6-1-6-7-10-13-10z" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"/>
+    </svg>
+
+    <div class="eyebrow">Head · Untangle</div>
+    <h1>Almost ready.</h1>
+    <p>Untangle V2 is built and waiting for its own home. Right now you're hitting the placeholder — the real app deploys soon.</p>
+
+    <div class="quote">
+      Webbybrain — Head · Heart · Hands · Hearth.<br>Shells for your own data.
+    </div>
+
+    <div class="links">
+      <a href="https://spine.thewebbybrain.com" class="link-card">
+        <span class="dot sage"></span>
+        <span>Spine — daily backbone</span>
+      </a>
+      <a href="https://hands.thewebbybrain.com" class="link-card">
+        <span class="dot gold"></span>
+        <span>Pots — money</span>
+      </a>
+    </div>
+
+    <div class="footer"><span class="webbybrain">webbybrain</span></div>
+  </div>
+</body>
+</html>
