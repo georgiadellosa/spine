@@ -105,7 +105,7 @@ function showSuccess(view, title, body) {
       </button>
     </div>
   `;
-  document.getElementById('continue').addEventListener('click', () => navigate('money'));
+  document.getElementById('continue').addEventListener('click', () => navigate('home'));
 }
 
 function showError(view, message) {

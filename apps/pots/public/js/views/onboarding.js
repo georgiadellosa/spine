@@ -58,7 +58,7 @@ function renderWelcome(view) {
     </div>
   `;
   document.getElementById('start').addEventListener('click', () => { stepIdx++; showStep(view); });
-  document.getElementById('skip').addEventListener('click', () => navigate('money'));
+  document.getElementById('skip').addEventListener('click', () => navigate('home'));
 }
 
 function renderIncome(view) {
@@ -242,7 +242,7 @@ function renderDone(view) {
       <button class="btn" id="finish" style="max-width: 320px; background: var(--gold);">Open dashboard ${icon('arrow', 18)}</button>
     </div>
   `;
-  document.getElementById('finish').addEventListener('click', () => navigate('money'));
+  document.getElementById('finish').addEventListener('click', () => navigate('home'));
 }
 
 // ── helpers ──

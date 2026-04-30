@@ -27,7 +27,7 @@ async function bootstrap() {
     navigate(hashRoute);
     return;
   }
-  navigate('money');
+  navigate('home');
 }
 
 bootstrap();
