@@ -1035,3 +1035,328 @@ label {
 .bill-row.upcoming .bill-due { color: var(--gold); }
 .bill-row.overdue .bill-due { color: var(--terracotta); }
 .bill-row.fine .bill-due { color: var(--ink-faint); }
+
+/* ──────────────────────────────────────────────────────────
+   Tile-grid landing (TwoNests-style home)
+   ────────────────────────────────────────────────────────── */
+.home-header { margin-bottom: 24px; }
+.home-greeting {
+  font-size: 32px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-family: 'Iowan Old Style', 'Charter', 'Georgia', serif;
+  color: var(--ink);
+  margin-bottom: 6px;
+}
+.home-quickrow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 24px;
+}
+.quick-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 18px 12px;
+  background: var(--paper);
+  border: 1px solid var(--sand);
+  border-radius: var(--radius-lg);
+  text-decoration: none;
+  color: inherit;
+  transition: transform var(--transition);
+  -webkit-tap-highlight-color: transparent;
+}
+.quick-stat:active { transform: scale(0.98); }
+.quick-stat .quick-num {
+  font-size: 32px;
+  font-weight: 600;
+  color: var(--sage);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  display: flex; align-items: center; justify-content: center;
+}
+.quick-stat .quick-label {
+  font-size: 12px;
+  color: var(--ink-soft);
+  margin-top: 6px;
+  text-align: center;
+}
+.quick-stat.done .quick-num { color: var(--sage); }
+
+.tile-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-bottom: 32px;
+}
+.tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 18px 16px;
+  background: var(--paper);
+  border: 1px solid var(--sand);
+  border-radius: var(--radius-lg);
+  text-decoration: none;
+  color: inherit;
+  transition: transform var(--transition), box-shadow var(--transition), border-color var(--transition);
+  -webkit-tap-highlight-color: transparent;
+  min-height: 130px;
+}
+.tile:active { transform: scale(0.97); }
+.tile:hover { box-shadow: var(--shadow-soft); border-color: var(--sand-line); }
+.tile-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px; height: 48px;
+  margin-bottom: 12px;
+}
+.tile-label {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+  margin-bottom: 4px;
+}
+.tile-desc {
+  font-size: 12px;
+  color: var(--ink-faint);
+  line-height: 1.35;
+}
+.tile--sage       .tile-icon { color: var(--sage); }
+.tile--sage-deep  .tile-icon { color: var(--sage-deep); }
+.tile--gold       .tile-icon { color: var(--gold); }
+.tile--terracotta .tile-icon { color: var(--terracotta); }
+
+@media (min-width: 540px) {
+  .tile-grid { grid-template-columns: repeat(3, 1fr); }
+  .home-quickrow { max-width: 480px; }
+}
+
+/* ──────────────────────────────────────────────────────────
+   TwoNests-style week calendar
+   ────────────────────────────────────────────────────────── */
+.cal-week-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  padding: 0 4px;
+}
+.cal-range {
+  font-size: var(--t-xl);
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+  font-family: 'Iowan Old Style', 'Charter', 'Georgia', serif;
+}
+.cal-nav-btn {
+  width: 40px; height: 40px;
+  background: var(--paper);
+  border: 1px solid var(--sand);
+  border-radius: 12px;
+  font-size: 22px;
+  color: var(--ink-soft);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background var(--transition);
+  -webkit-tap-highlight-color: transparent;
+}
+.cal-nav-btn:hover { background: var(--paper-2); color: var(--ink); }
+.cal-nav-btn:active { transform: scale(0.94); }
+
+.day-card {
+  background: var(--paper);
+  border: 1px solid var(--sand);
+  border-radius: var(--radius-lg);
+  margin-bottom: 12px;
+  overflow: hidden;
+  transition: border-color var(--transition);
+}
+.day-card.today {
+  border-color: var(--sage);
+  background: var(--sage-faint);
+}
+.day-card.past { opacity: 0.7; }
+.day-card.drop-target {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(201, 152, 92, 0.15);
+}
+.day-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.day-card-header:active { background: var(--paper-2); }
+.day-card.today .day-card-header:active { background: var(--sage-soft); }
+.day-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+.day-card.today .day-name { color: var(--sage-deep); }
+.day-date {
+  font-size: 12px;
+  color: var(--ink-soft);
+  margin-top: 2px;
+}
+.day-add-btn {
+  width: 32px; height: 32px;
+  background: transparent;
+  border: 1px dashed var(--sand-line);
+  border-radius: 50%;
+  color: var(--ink-soft);
+  font-size: 18px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all var(--transition);
+  -webkit-tap-highlight-color: transparent;
+}
+.day-card-header:hover .day-add-btn { border-color: var(--sage); color: var(--sage); }
+.day-card.today .day-add-btn { border-color: var(--sage); color: var(--sage); border-style: solid; }
+.day-empty {
+  padding: 0 18px 14px;
+  font-size: 12px;
+  color: var(--ink-faint);
+  font-style: italic;
+}
+.day-events { padding: 0 12px 12px; }
+.event-chip {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 10px 14px;
+  margin-bottom: 6px;
+  background: var(--paper);
+  border-left: 3px solid var(--chip-color, var(--sage));
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background var(--transition);
+  -webkit-tap-highlight-color: transparent;
+}
+.event-chip:hover { background: var(--paper-2); }
+.event-chip:active { transform: scale(0.99); }
+.event-chip .event-time {
+  font-size: 12px;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+  min-width: 90px;
+}
+.event-chip .event-title {
+  font-size: 14px;
+  color: var(--ink);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.priority-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 14px;
+  background: var(--sage-faint);
+  color: var(--sage-deep);
+  border: 1px solid var(--sage-soft);
+  border-radius: var(--radius-pill);
+  font-size: 13px;
+  cursor: grab;
+  user-select: none;
+  transition: transform var(--transition);
+}
+.priority-pill:active, .priority-pill.dragging { cursor: grabbing; transform: scale(0.96); opacity: 0.7; }
+.priority-pill strong { font-weight: 600; }
+
+/* ──────────────────────────────────────────────────────────
+   Improved modal / dialog
+   ────────────────────────────────────────────────────────── */
+.modal-card h2 {
+  font-family: 'Iowan Old Style', 'Charter', 'Georgia', serif;
+  font-size: 22px;
+  letter-spacing: -0.01em;
+  font-weight: 600;
+}
+.modal.closing { animation: fadeOut 180ms ease-out forwards; }
+.modal.closing .modal-card { animation: slideDown 180ms ease-out forwards; }
+@keyframes fadeOut { to { opacity: 0; } }
+@keyframes slideDown {
+  to { transform: translateY(20px); opacity: 0; }
+}
+.modal-card { box-shadow: 0 -8px 40px rgba(0,0,0,0.18), 0 -2px 8px rgba(0,0,0,0.08); }
+@media (min-width: 600px) {
+  .modal-card { box-shadow: 0 8px 40px rgba(0,0,0,0.2), 0 2px 8px rgba(0,0,0,0.1); }
+}
+.modal-card .field:last-of-type { margin-bottom: 24px; }
+.modal-close {
+  width: 36px; height: 36px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 10px;
+  border: none;
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.modal-close:hover {
+  background: var(--paper-2);
+  color: var(--ink);
+}
+.modal-close:active { transform: scale(0.93); }
+
+/* Thermometer / progress bar */
+.thermometer {
+  position: relative;
+  width: 100%;
+  height: 36px;
+  background: var(--paper-2);
+  border: 1px solid var(--sand);
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.05);
+}
+.thermometer-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: linear-gradient(90deg, var(--gold), #d9b074);
+  border-radius: 18px;
+  transition: width 600ms cubic-bezier(0.2, 0.8, 0.3, 1);
+  box-shadow: 0 1px 4px rgba(201, 152, 92, 0.3);
+}
+.thermometer-fill.complete {
+  background: linear-gradient(90deg, var(--sage), var(--sage-deep));
+  box-shadow: 0 1px 4px rgba(91, 110, 90, 0.3);
+}
+.thermometer-fill::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(255,255,255,0.18), transparent 50%);
+  border-radius: 18px;
+}
+.thermometer-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 2px rgba(255,255,255,0.6);
+  z-index: 2;
+}
+@media (prefers-color-scheme: dark) {
+  .thermometer-label { text-shadow: 0 1px 2px rgba(0,0,0,0.4); }
+}

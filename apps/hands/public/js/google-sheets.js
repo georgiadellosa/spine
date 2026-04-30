@@ -7,6 +7,8 @@ export const TABS = [
   { name: 'Categories', headers: ['Name', 'Type', 'Monthly Target', 'Color', 'Notes'] },
   { name: 'Bills', headers: ['Name', 'Amount', 'Frequency', 'Due Day', 'Category', 'Account', 'Last Paid', 'Notes'] },
   { name: 'Accounts', headers: ['Name', 'Type', 'Current Balance', 'Last Updated', 'Notes'] },
+  { name: 'Debts', headers: ['Name', 'Type', 'Original Amount', 'Current Balance', 'Interest Rate', 'Min Payment', 'Target Payoff', 'Status', 'Why', 'Notes', 'Created'] },
+  { name: 'Income', headers: ['Source', 'Amount', 'Frequency', 'Type', 'Active', 'End Date', 'Notes'] },
   { name: 'Money Goals', headers: ['Name', 'Type', 'Target Amount', 'Current Amount', 'Target Date', 'Why', 'Status', 'Created'] }
 ];
 

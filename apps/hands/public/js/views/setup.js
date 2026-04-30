@@ -76,7 +76,8 @@ async function createNew(view) {
     const sheetId = await createBudgetSheet();
     setSheetId(sheetId);
     setSetupComplete();
-    showSuccess(view, 'You\'re set up.', 'Your Hands spreadsheet is in your Google Drive. Add a few transactions and the dashboard fills in.');
+    // Fresh sheet — walk through onboarding (income, bills, debts, goals)
+    navigate('onboarding');
   } catch (err) {
     showError(view, err.message);
   }

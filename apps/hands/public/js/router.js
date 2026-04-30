@@ -3,19 +3,21 @@ import { icon } from './icons.js';
 const VIEWS = {
   login: () => import('./views/login.js'),
   setup: () => import('./views/setup.js'),
+  onboarding: () => import('./views/onboarding.js'),
   money: () => import('./views/money.js'),
   transactions: () => import('./views/transactions.js'),
   categories: () => import('./views/categories.js'),
   bills: () => import('./views/bills.js'),
   accounts: () => import('./views/accounts.js'),
+  debts: () => import('./views/debts.js'),
   settings: () => import('./views/settings.js')
 };
 
 const NAV = [
   { route: 'money', label: 'Money', icon: 'coin' },
   { route: 'transactions', label: 'Txns', icon: 'doIt' },
+  { route: 'debts', label: 'Debts', icon: 'flame' },
   { route: 'bills', label: 'Bills', icon: 'bill' },
-  { route: 'accounts', label: 'Accounts', icon: 'wallet' },
   { route: 'settings', label: 'More', icon: 'more' }
 ];
 const NAV_ROUTES = NAV.map(n => n.route);

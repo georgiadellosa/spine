@@ -17,9 +17,11 @@ export async function render(view) {
       <div class="eyebrow mb-3">Manage</div>
       ${linkRow('money', 'coin', 'Money dashboard', 'In, out, runway')}
       ${linkRow('transactions', 'doIt', 'Transactions', 'Every dollar in and out')}
+      ${linkRow('debts', 'flame', 'Debts', 'Watch them shrink')}
       ${linkRow('categories', 'layers', 'Categories', 'Targets and types')}
       ${linkRow('bills', 'bill', 'Bills', 'Recurring expenses')}
       ${linkRow('accounts', 'wallet', 'Accounts', 'Net worth, balances')}
+      ${linkRow('onboarding', 'sparkle', 'Setup wizard', 'Add income, bills, debts, goals in one go')}
     </div>
 
     <div class="card">
