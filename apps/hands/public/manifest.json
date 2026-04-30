@@ -1,0 +1,13 @@
+{
+  "name": "Hands",
+  "short_name": "Hands",
+  "description": "Where your money actually goes",
+  "start_url": "/#/money",
+  "display": "standalone",
+  "background_color": "#faf6ef",
+  "theme_color": "#c9985c",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

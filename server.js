@@ -11,20 +11,40 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 
 const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
 
 app.use(express.json({ limit: '5mb' }));
-app.use(express.static(path.join(__dirname, 'public')));
 
+// Hostname → app routing
+function appForHost(host) {
+  if (!host) return 'spine';
+  const h = host.toLowerCase();
+  if (h.startsWith('hands.')) return 'hands';
+  if (h.startsWith('head.')) return 'head';
+  if (h.startsWith('heart.')) return 'heart';
+  if (h.startsWith('hearth.')) return 'hearth';
+  return 'spine';
+}
+
+// Per-app config endpoint
 app.get('/config.js', (req, res) => {
+  const target = appForHost(req.hostname);
   res.type('application/javascript');
-  res.send(`window.__SPINE_CONFIG__ = ${JSON.stringify({
-    googleClientId: process.env.GOOGLE_CLIENT_ID || '',
-    appUrl: process.env.APP_URL || ''
-  })};`);
+  if (target === 'hands') {
+    res.send(`window.__HANDS_CONFIG__ = ${JSON.stringify({
+      googleClientId: process.env.GOOGLE_CLIENT_ID || '',
+      appUrl: process.env.HANDS_APP_URL || `https://hands.thewebbybrain.com`
+    })};`);
+  } else {
+    res.send(`window.__SPINE_CONFIG__ = ${JSON.stringify({
+      googleClientId: process.env.GOOGLE_CLIENT_ID || '',
+      appUrl: process.env.SPINE_APP_URL || `https://spine.thewebbybrain.com`
+    })};`);
+  }
 });
 
+// Shared API: Whisper transcription (used by Spine)
 app.post('/api/whisper', upload.single('audio'), async (req, res) => {
   if (!openai) return res.status(500).json({ error: 'OpenAI not configured' });
   if (!req.file) return res.status(400).json({ error: 'No audio file' });
-  const tmpPath = `/tmp/spine-${Date.now()}.webm`;
+  const tmpPath = `/tmp/wb-${Date.now()}.webm`;
   try {
     fs.writeFileSync(tmpPath, req.file.buffer);
     const result = await openai.audio.transcriptions.create({
@@ -40,6 +60,7 @@ app.post('/api/whisper', upload.single('audio'), async (req, res) => {
   }
 });
 
+// Shared API: brain-dump / shrink-priority / paste-ingest (used by Spine)
 app.post('/api/parse', async (req, res) => {
   if (!openai) return res.status(500).json({ error: 'OpenAI not configured' });
   const { text, mode, capacity, priority } = req.body;
@@ -50,7 +71,7 @@ app.post('/api/parse', async (req, res) => {
       systemPrompt = `Given a priority and a capacity tier 1-5, return ONLY {"smaller_version":"..."}. Lower capacity = smaller action. Tier 1 = "open the document and read 1 paragraph" small. Tier 2 = 15 minutes. Tier 5 = full normal version. Be concrete and warm.`;
       userContent = `Priority: ${priority}\nCapacity: ${capacity}`;
     } else if (mode === 'ingest-paste') {
-      systemPrompt = `Parse this pasted text (often from a Claude conversation, plan, or list) into discrete brain-dump items. Skip preamble, headers, and meta-commentary — only extract concrete actions, concerns, or things to track. Return ONLY {"items":[{"text":"...","domain":"PhD|LLW|Family|Finance|Other"}]}.`;
+      systemPrompt = `Parse this pasted text into discrete brain-dump items. Skip preamble, headers, meta-commentary — only extract concrete actions, concerns, or things to track. Return ONLY {"items":[{"text":"...","domain":"PhD|LLW|Family|Finance|Other"}]}.`;
       userContent = text;
     } else {
       systemPrompt = `Parse the following brain dump into discrete items. Return ONLY {"items":[{"text":"...","domain":"PhD|LLW|Family|Finance|Other"}]}. Each item is one action or concern. Infer domain from context. Keep items short and concrete.`;
@@ -71,8 +92,43 @@ app.post('/api/parse', async (req, res) => {
   }
 });
 
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+// Shared API: CSV parsing (used by Hands)
+app.post('/api/parse-csv', async (req, res) => {
+  if (!openai) return res.status(500).json({ error: 'OpenAI not configured' });
+  const { csv } = req.body;
+  if (!csv) return res.status(400).json({ error: 'No CSV' });
+  try {
+    const result = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: `Parse this bank-statement CSV into transactions. Return ONLY {"transactions":[{"date":"YYYY-MM-DD","amount":<number, negative for expense>,"description":"...","suggested_category":"..."}]}. Skip header rows. Infer category from description (e.g. "Coles" → "Groceries", "Netflix" → "Subscriptions").` },
+        { role: 'user', content: csv.slice(0, 50000) }
+      ],
+      response_format: { type: 'json_object' }
+    });
+    res.json(JSON.parse(result.choices[0].message.content));
+  } catch (err) {
+    console.error('csv', err);
+    res.status(500).json({ error: 'Parse failed' });
+  }
 });
 
-app.listen(PORT, () => console.log(`Spine listening on ${PORT}`));
+// Static file serving — picks the right app based on hostname
+app.use((req, res, next) => {
+  const target = appForHost(req.hostname);
+  const dir = path.join(__dirname, 'apps', target, 'public');
+  express.static(dir)(req, res, next);
+});
+
+// SPA fallback per app
+app.get('*', (req, res) => {
+  const target = appForHost(req.hostname);
+  const indexPath = path.join(__dirname, 'apps', target, 'public', 'index.html');
+  if (fs.existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    res.status(404).send(`No app configured for hostname ${req.hostname}`);
+  }
+});
+
+app.listen(PORT, () => console.log(`webbybrain serving on ${PORT}`));
