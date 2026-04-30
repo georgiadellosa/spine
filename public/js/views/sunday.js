@@ -2,6 +2,7 @@ import { appendRow } from '../google-sheets.js';
 import { getDriveFolderId, getSheetId } from '../store.js';
 import { uploadAudioToDrive } from '../google-drive.js';
 import { whisperTranscribe, parseBrainDump } from '../api.js';
+import { icon } from '../icons.js';
 
 let state = { items: [], decisions: [], rawText: '', source: 'Text' };
 
@@ -12,33 +13,40 @@ export async function render(view) {
 
 function showBrainDump(view) {
   view.innerHTML = `
-    <h1>Sunday Decision</h1>
-    <p class="muted">Step 1 of 3 — brain dump</p>
-    <p>Get it all out. Work, life, kids, body, money — anything taking up space. Don't filter.</p>
+    <div class="eyebrow">Step 1 of 3</div>
+    <h1>Brain dump</h1>
+    <p class="subtitle">Get it all out. Don't filter.</p>
 
     <div class="field">
-      <textarea id="dump" placeholder="Type it all out, one thought per line if it helps..."></textarea>
+      <textarea id="dump" placeholder="Work, life, kids, body, money — anything taking up space. One thought per line if it helps." autofocus></textarea>
     </div>
 
-    <div class="field">
-      <button class="mic-btn" id="mic">🎙 Voice dump instead</button>
-      <div id="voice-status" class="muted" style="margin-top: 8px;"></div>
+    <div class="row" style="justify-content: space-between; align-items: center;">
+      <button class="mic-btn" id="mic">${icon('mic', 16)} Voice instead</button>
+      <span class="faint" id="char-count">0 chars</span>
     </div>
+    <div id="voice-status" class="help mt-2"></div>
 
-    <button class="btn" id="next">Parse it</button>
+    <button class="btn mt-5" id="next">
+      Parse it ${icon('arrow', 18)}
+    </button>
     <div id="msg"></div>
   `;
   setupMic();
+  document.getElementById('dump').addEventListener('input', e => {
+    document.getElementById('char-count').textContent = `${e.target.value.length} chars`;
+  });
+
   document.getElementById('next').addEventListener('click', async () => {
     const text = document.getElementById('dump').value.trim();
     if (!text) {
-      document.getElementById('msg').innerHTML = `<div class="error">Add some text or record a voice dump first</div>`;
+      document.getElementById('msg').innerHTML = `<div class="error">Add some text or record voice first</div>`;
       return;
     }
     state.rawText = text;
     const btn = document.getElementById('next');
     btn.disabled = true;
-    btn.textContent = 'Parsing...';
+    btn.innerHTML = 'Parsing… <div class="spinner" style="width: 16px; height: 16px; margin-left: 8px;"></div>';
     try {
       const result = await parseBrainDump(text);
       state.items = result.items || [];
@@ -53,7 +61,7 @@ function showBrainDump(view) {
       }
     } catch (err) {
       btn.disabled = false;
-      btn.textContent = 'Parse it';
+      btn.innerHTML = `Parse it ${icon('arrow', 18)}`;
       document.getElementById('msg').innerHTML = `<div class="error">${err.message}</div>`;
     }
   });
@@ -68,7 +76,7 @@ function setupMic() {
   mic.addEventListener('click', async () => {
     if (mediaRecorder && mediaRecorder.state === 'recording') {
       mediaRecorder.stop();
-      mic.textContent = '🎙 Voice dump instead';
+      mic.innerHTML = `${icon('mic', 16)} Voice instead`;
       mic.classList.remove('recording');
       return;
     }
@@ -79,7 +87,7 @@ function setupMic() {
       mediaRecorder.ondataavailable = e => chunks.push(e.data);
       mediaRecorder.onstop = async () => {
         stream.getTracks().forEach(t => t.stop());
-        status.textContent = 'Transcribing...';
+        status.textContent = 'Transcribing…';
         const blob = new Blob(chunks, { type: 'audio/webm' });
         try {
           const folderId = getDriveFolderId();
@@ -89,14 +97,15 @@ function setupMic() {
           document.getElementById('dump').value = transcript;
           state.source = 'Voice';
           status.textContent = 'Done — review and edit before parsing.';
+          document.getElementById('char-count').textContent = `${transcript.length} chars`;
         } catch (err) {
           status.innerHTML = `<span class="error">${err.message}</span>`;
         }
       };
       mediaRecorder.start();
-      mic.textContent = '⏹ Stop';
+      mic.innerHTML = `${icon('stop', 16)} Stop`;
       mic.classList.add('recording');
-      status.textContent = 'Recording... (tap to stop)';
+      status.textContent = 'Recording… (tap to stop)';
     } catch {
       status.innerHTML = `<span class="error">Mic permission denied</span>`;
     }
@@ -111,23 +120,32 @@ function showTriage(view) {
   }
   const item = state.decisions[undecided];
   const remaining = state.decisions.filter(d => !d.decision).length;
+  const total = state.decisions.length;
+  const done = total - remaining;
+  const progressPct = (done / total) * 100;
 
   view.innerHTML = `
+    <div class="eyebrow">Step 2 of 3 · ${remaining} left</div>
     <h1>Triage</h1>
-    <p class="muted">Step 2 of 3 — ${remaining} item${remaining !== 1 ? 's' : ''} left · ${escHtml(item.item.domain)}</p>
+    <p class="subtitle">For each item, one quick decision.</p>
 
-    <div class="card" style="text-align: center; padding: 32px 20px;">
-      <div style="font-size: 18px; line-height: 1.4;">${escHtml(item.item.text)}</div>
+    <div class="progress mb-4">
+      <div class="bar" style="width: ${progressPct}%"></div>
     </div>
 
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 20px;">
-      <button class="btn" data-d="Do">Do this week</button>
-      <button class="btn btn-ghost" data-d="Delay">Delay</button>
-      <button class="btn btn-ghost" data-d="Delegate">Delegate</button>
-      <button class="btn btn-ghost" data-d="Drop">Drop</button>
+    <div class="triage-card">
+      <div class="chip mb-3">${escHtml(item.item.domain || 'Other')}</div>
+      <div class="item-text">${escHtml(item.item.text)}</div>
     </div>
 
-    <div id="follow-up" style="margin-top: 20px;"></div>
+    <div class="triage-grid">
+      <button class="btn" data-d="Do">${icon('doIt', 18)} Do this week</button>
+      <button class="btn btn-ghost" data-d="Delay">${icon('delay', 18)} Delay</button>
+      <button class="btn btn-ghost" data-d="Delegate">${icon('delegate', 18)} Delegate</button>
+      <button class="btn btn-ghost" data-d="Drop">${icon('drop', 18)} Drop</button>
+    </div>
+
+    <div id="follow-up" class="mt-4"></div>
   `;
   view.querySelectorAll('button[data-d]').forEach(btn => {
     btn.addEventListener('click', () => decide(view, undecided, btn.dataset.d));
@@ -141,8 +159,10 @@ function decide(view, idx, decision) {
     recordTriage(idx).then(() => showTriage(view));
   } else if (decision === 'Drop') {
     followUp.innerHTML = `
-      <input type="text" id="reason" placeholder="One-word reason (optional)" />
-      <button class="btn" id="ok" style="margin-top: 10px;">Drop it</button>
+      <div class="card">
+        <input type="text" id="reason" placeholder="One-word reason (optional, but useful later)" autofocus />
+        <button class="btn btn-warm mt-3" id="ok">Drop it</button>
+      </div>
     `;
     document.getElementById('ok').addEventListener('click', () => {
       state.decisions[idx].decision = 'Drop';
@@ -151,9 +171,11 @@ function decide(view, idx, decision) {
     });
   } else if (decision === 'Delay') {
     followUp.innerHTML = `
-      <label>Resurface when?</label>
-      <input type="date" id="rdate" />
-      <button class="btn" id="ok" style="margin-top: 10px;">Delay</button>
+      <div class="card">
+        <label>Resurface when?</label>
+        <input type="date" id="rdate" autofocus />
+        <button class="btn mt-3" id="ok">Delay</button>
+      </div>
     `;
     document.getElementById('ok').addEventListener('click', () => {
       state.decisions[idx].decision = 'Delay';
@@ -162,9 +184,11 @@ function decide(view, idx, decision) {
     });
   } else if (decision === 'Delegate') {
     followUp.innerHTML = `
-      <label>To whom?</label>
-      <input type="text" id="who" placeholder="e.g. kids' dad, supervisor, AI, Lara" />
-      <button class="btn" id="ok" style="margin-top: 10px;">Delegate</button>
+      <div class="card">
+        <label>To whom?</label>
+        <input type="text" id="who" placeholder="e.g. kids' dad, supervisor, AI, Lara" autofocus />
+        <button class="btn mt-3" id="ok">Delegate</button>
+      </div>
     `;
     document.getElementById('ok').addEventListener('click', () => {
       state.decisions[idx].decision = 'Delegate';
@@ -179,7 +203,7 @@ async function recordTriage(idx) {
     const sheetId = getSheetId();
     const d = state.decisions[idx];
     const today = new Date().toISOString().slice(0, 10);
-    const id = `${today}-${idx}`;
+    const id = `${today}-${idx}-${Math.random().toString(36).slice(2, 6)}`;
     await appendRow(sheetId, 'Triage', [
       id, today, d.item.text, d.decision, d.item.domain,
       d.resurfaceDate || '', d.delegateTo || '', d.dropReason || '',
@@ -202,40 +226,41 @@ function showPickThree(view) {
   const opts = (arr) => arr.map(i => `<option value="${escAttr(i.text)}">${escHtml(i.text)}</option>`).join('');
 
   view.innerHTML = `
+    <div class="eyebrow">Step 3 of 3</div>
     <h1>Pick three</h1>
-    <p class="muted">Step 3 of 3 — one per domain. Pick what would matter most.</p>
+    <p class="subtitle">One per domain. The thing that would matter most.</p>
 
     <div class="field">
       <label>PhD</label>
       <select id="phd-pick">
-        <option value="">— pick or type below —</option>
+        <option value="">Pick from your dump, or type below</option>
         ${opts(byDomain.PhD)}
-        ${byDomain.Other.length ? `<optgroup label="Other">${opts(byDomain.Other)}</optgroup>` : ''}
+        ${byDomain.Other.length ? `<optgroup label="Other items from dump">${opts(byDomain.Other)}</optgroup>` : ''}
       </select>
-      <input type="text" id="phd-custom" placeholder="Or type your own" style="margin-top: 8px;" />
+      <input type="text" id="phd-custom" placeholder="Or type your own" class="mt-2" />
     </div>
 
     <div class="field">
       <label>LLW</label>
       <select id="llw-pick">
-        <option value="">— pick or type below —</option>
+        <option value="">Pick from your dump, or type below</option>
         ${opts(byDomain.LLW)}
-        ${byDomain.Other.length ? `<optgroup label="Other">${opts(byDomain.Other)}</optgroup>` : ''}
+        ${byDomain.Other.length ? `<optgroup label="Other items from dump">${opts(byDomain.Other)}</optgroup>` : ''}
       </select>
-      <input type="text" id="llw-custom" placeholder="Or type your own" style="margin-top: 8px;" />
+      <input type="text" id="llw-custom" placeholder="Or type your own" class="mt-2" />
     </div>
 
     <div class="field">
       <label>Family</label>
       <select id="family-pick">
-        <option value="">— pick or type below —</option>
+        <option value="">Pick from your dump, or type below</option>
         ${opts(byDomain.Family)}
-        ${byDomain.Other.length ? `<optgroup label="Other">${opts(byDomain.Other)}</optgroup>` : ''}
+        ${byDomain.Other.length ? `<optgroup label="Other items from dump">${opts(byDomain.Other)}</optgroup>` : ''}
       </select>
-      <input type="text" id="family-custom" placeholder="Or type your own" style="margin-top: 8px;" />
+      <input type="text" id="family-custom" placeholder="Or type your own" class="mt-2" />
     </div>
 
-    <button class="btn" id="lock">Lock in this week</button>
+    <button class="btn" id="lock">Lock in this week ${icon('arrow', 18)}</button>
     <div id="msg"></div>
   `;
 
@@ -249,13 +274,12 @@ function showPickThree(view) {
     }
     const btn = document.getElementById('lock');
     btn.disabled = true;
-    btn.textContent = 'Saving...';
+    btn.textContent = 'Saving…';
     try {
       const sheetId = getSheetId();
       const today = new Date();
-      const monday = new Date(today);
-      // Next Monday (if today is Sunday, this Monday is tomorrow; otherwise next week's)
       const daysToMonday = (1 - today.getDay() + 7) % 7 || 7;
+      const monday = new Date(today);
       monday.setDate(today.getDate() + daysToMonday);
       const ws = monday.toISOString().slice(0, 10);
       const now = new Date().toISOString();
@@ -266,12 +290,22 @@ function showPickThree(view) {
       ]);
       view.innerHTML = `
         <div class="center-screen">
+          <div class="celebrate-check">${icon('check', 40)}</div>
           <h1>Locked.</h1>
-          <p>Three priorities for the week starting ${ws}.</p>
-          <div style="text-align: left; max-width: 320px; line-height: 1.6;">
-            <strong>PhD:</strong> ${escHtml(phd)}<br>
-            <strong>LLW:</strong> ${escHtml(llw)}<br>
-            <strong>Family:</strong> ${escHtml(family)}
+          <p class="muted">Three priorities for the week starting ${ws}.</p>
+          <div class="stack-3" style="max-width: 360px; width: 100%;">
+            <div class="priority-card">
+              <div class="domain">PhD</div>
+              <div class="text">${escHtml(phd)}</div>
+            </div>
+            <div class="priority-card">
+              <div class="domain">LLW</div>
+              <div class="text">${escHtml(llw)}</div>
+            </div>
+            <div class="priority-card">
+              <div class="domain">Family</div>
+              <div class="text">${escHtml(family)}</div>
+            </div>
           </div>
         </div>
       `;

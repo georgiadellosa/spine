@@ -1,16 +1,21 @@
 import { signIn } from '../auth.js';
 import { navigate } from '../router.js';
 import { getSheetId } from '../store.js';
+import { icon } from '../icons.js';
 
 export async function render(view) {
   view.innerHTML = `
     <div class="center-screen">
-      <h1>Spine</h1>
-      <p>Daily anchor for the things that matter.</p>
-      <button class="btn" id="signin">Sign in with Google</button>
-      <p class="muted" style="font-size: 13px; max-width: 320px;">
+      <div class="icon-large">${icon('leaf', 72)}</div>
+      <div class="wordmark">Spine</div>
+      <p style="max-width: 320px; font-size: 16px;">Daily anchor for the things that matter. One priority. One ritual at a time.</p>
+      <button class="btn" id="signin" style="max-width: 320px;">
+        ${icon('google', 20)}
+        Continue with Google
+      </button>
+      <p class="faint" style="max-width: 320px; line-height: 1.5;">
         Spine reads and writes only to your own Google Sheets, Drive, and Calendar.
-        Nothing about your content is stored on the server.
+        Your content never touches our server.
       </p>
     </div>
   `;
@@ -22,7 +27,7 @@ export async function render(view) {
     } catch (err) {
       console.error('Sign-in failed', err);
       view.querySelector('.center-screen').insertAdjacentHTML('beforeend',
-        `<div class="error">Sign-in failed: ${err.message}</div>`);
+        `<div class="error" style="max-width: 320px;">Sign-in failed: ${err.message}</div>`);
     }
   });
 }

@@ -2,6 +2,7 @@ import { appendRow, getRows, updateRow } from '../google-sheets.js';
 import { getSheetId, getDriveFolderId } from '../store.js';
 import { uploadAudioToDrive } from '../google-drive.js';
 import { whisperTranscribe } from '../api.js';
+import { icon } from '../icons.js';
 
 let state = { outcome: null, win: '', voiceMemoUrl: '' };
 
@@ -27,13 +28,14 @@ export async function render(view) {
   }
 
   view.innerHTML = `
-    <h1>Evening</h1>
-    <p class="muted">${formatToday()}</p>
+    <div class="eyebrow">${formatToday()}</div>
+    <h1>Evening close</h1>
+    <p class="subtitle">A gentle wrap. No pressure.</p>
 
     ${priority ? `
       <div class="priority-card">
         <div class="domain">Today's priority was</div>
-        <div class="text">${escape(priority)}</div>
+        <div class="text">${escHtml(priority)}</div>
       </div>
       <div class="field">
         <label>Did it move?</label>
@@ -43,17 +45,21 @@ export async function render(view) {
           <button data-out="No">No</button>
         </div>
       </div>
-    ` : '<p>No check-in logged this morning. That happens. Log a win below if you want.</p>'}
+    ` : `
+      <div class="card">
+        <p style="margin: 0;">No check-in logged this morning. That happens. Log a win below if you want.</p>
+      </div>
+    `}
 
     <div class="field">
-      <label>Log a win (anything counts)</label>
-      <input type="text" id="win" placeholder="e.g. read 1 paragraph, made dinner" />
+      <label>Log a win <span class="faint">(anything counts)</span></label>
+      <input type="text" id="win" placeholder="read 1 paragraph · made dinner · stepped outside" autocomplete="off" />
     </div>
 
     <div class="field">
-      <label>Voice dump (optional)</label>
-      <button class="mic-btn" id="mic">🎙 Record</button>
-      <div id="voice-status" class="muted" style="margin-top: 8px;"></div>
+      <label>Voice dump <span class="faint">(optional)</span></label>
+      <button class="mic-btn" id="mic">${icon('mic', 16)} Record</button>
+      <div id="voice-status" class="help" style="margin-top: 8px;"></div>
     </div>
 
     <button class="btn" id="submit">Close out</button>
@@ -69,7 +75,6 @@ export async function render(view) {
         b.classList.toggle('selected', b.dataset.out === btn.dataset.out));
     });
   }
-
   document.getElementById('win').addEventListener('input', (e) => {
     state.win = e.target.value.trim();
   });
@@ -86,7 +91,7 @@ function setupMic() {
   mic.addEventListener('click', async () => {
     if (mediaRecorder && mediaRecorder.state === 'recording') {
       mediaRecorder.stop();
-      mic.textContent = '🎙 Record';
+      mic.innerHTML = `${icon('mic', 16)} Record`;
       mic.classList.remove('recording');
       return;
     }
@@ -97,27 +102,27 @@ function setupMic() {
       mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
       mediaRecorder.onstop = async () => {
         stream.getTracks().forEach(t => t.stop());
-        status.textContent = 'Transcribing...';
+        status.textContent = 'Transcribing…';
         const blob = new Blob(chunks, { type: 'audio/webm' });
         try {
           const folderId = getDriveFolderId();
-          const filename = `evening-${new Date().toISOString().replace(/[:.]/g, '-')}.webm`;
-          const url = await uploadAudioToDrive(folderId, blob, filename);
+          const fname = `evening-${new Date().toISOString().replace(/[:.]/g, '-')}.webm`;
+          const url = await uploadAudioToDrive(folderId, blob, fname);
           state.voiceMemoUrl = url;
           const { transcript } = await whisperTranscribe(blob);
-          status.innerHTML = `<strong>Transcript:</strong> ${escape(transcript)}`;
+          status.innerHTML = `<strong>Transcript:</strong> ${escHtml(transcript)}`;
           if (!state.win) {
             state.win = transcript.slice(0, 200);
             document.getElementById('win').value = state.win;
           }
         } catch (err) {
-          status.innerHTML = `<span class="error">Voice memo failed: ${err.message}</span>`;
+          status.innerHTML = `<span class="error">${err.message}</span>`;
         }
       };
       mediaRecorder.start();
-      mic.textContent = '⏹ Stop';
+      mic.innerHTML = `${icon('stop', 16)} Stop`;
       mic.classList.add('recording');
-      status.textContent = 'Recording... (tap to stop)';
+      status.textContent = 'Recording… (tap to stop)';
     } catch {
       status.innerHTML = `<span class="error">Mic permission denied</span>`;
     }
@@ -127,7 +132,7 @@ function setupMic() {
 async function submit(view, todayRow, todayRowIndex) {
   const btn = document.getElementById('submit');
   btn.disabled = true;
-  btn.textContent = 'Saving...';
+  btn.textContent = 'Saving…';
   const msg = document.getElementById('msg');
   try {
     const sheetId = getSheetId();
@@ -148,7 +153,12 @@ async function submit(view, todayRow, todayRowIndex) {
 
     view.innerHTML = `
       <div class="center-screen">
+        <div class="celebrate-check">${icon('check', 40)}</div>
         <h1>Done.</h1>
+        ${state.win ? `<div class="card warm" style="max-width: 360px;">
+          <div class="eyebrow">Win logged</div>
+          <div style="font-size: 16px; color: var(--ink);">${escHtml(state.win)}</div>
+        </div>` : ''}
         <p class="muted">Rest well. Tomorrow's morning check-in is ready when you are.</p>
       </div>
     `;
@@ -160,13 +170,9 @@ async function submit(view, todayRow, todayRowIndex) {
   }
 }
 
-function escape(s) {
-  return String(s).replace(/[&<>"']/g, c =>
-    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-}
-
 function formatToday() {
-  return new Date().toLocaleDateString(undefined, {
-    weekday: 'long', month: 'long', day: 'numeric'
-  });
+  return new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+}
+function escHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }

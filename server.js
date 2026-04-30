@@ -45,12 +45,17 @@ app.post('/api/parse', async (req, res) => {
   const { text, mode, capacity, priority } = req.body;
   if (!text && mode !== 'shrink-priority') return res.status(400).json({ error: 'No text' });
   try {
-    const systemPrompt = mode === 'shrink-priority'
-      ? `Given a priority and a capacity tier 1-5, return ONLY {"smaller_version":"..."}. Lower capacity = smaller action. Tier 1 = "open the document and read 1 paragraph" small. Tier 5 = full normal version.`
-      : `Parse the following brain dump into discrete items. Return ONLY {"items":[{"text":"...","domain":"PhD|LLW|Family|Other"}]}. Each item is one action or concern. Infer domain from context. Keep items short and concrete.`;
-    const userContent = mode === 'shrink-priority'
-      ? `Priority: ${priority}\nCapacity: ${capacity}`
-      : text;
+    let systemPrompt, userContent;
+    if (mode === 'shrink-priority') {
+      systemPrompt = `Given a priority and a capacity tier 1-5, return ONLY {"smaller_version":"..."}. Lower capacity = smaller action. Tier 1 = "open the document and read 1 paragraph" small. Tier 2 = 15 minutes. Tier 5 = full normal version. Be concrete and warm.`;
+      userContent = `Priority: ${priority}\nCapacity: ${capacity}`;
+    } else if (mode === 'ingest-paste') {
+      systemPrompt = `Parse this pasted text (often from a Claude conversation, plan, or list) into discrete brain-dump items. Skip preamble, headers, and meta-commentary — only extract concrete actions, concerns, or things to track. Return ONLY {"items":[{"text":"...","domain":"PhD|LLW|Family|Other"}]}.`;
+      userContent = text;
+    } else {
+      systemPrompt = `Parse the following brain dump into discrete items. Return ONLY {"items":[{"text":"...","domain":"PhD|LLW|Family|Other"}]}. Each item is one action or concern. Infer domain from context. Keep items short and concrete.`;
+      userContent = text;
+    }
     const result = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       messages: [

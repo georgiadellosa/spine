@@ -1,6 +1,7 @@
 import { getRows, appendRow } from '../google-sheets.js';
 import { getSheetId, getCalendarId } from '../store.js';
 import { withFreshToken } from '../auth.js';
+import { icon } from '../icons.js';
 
 const CAL_API = 'https://www.googleapis.com/calendar/v3';
 let state = { shipped: '', stuck: '', moves: '', mood: null, note: '' };
@@ -8,9 +9,11 @@ let state = { shipped: '', stuck: '', moves: '', mood: null, note: '' };
 export async function render(view) {
   state = { shipped: '', stuck: '', moves: '', mood: null, note: '' };
   view.innerHTML = `
-    <h1>Friday Close</h1>
-    <p class="muted">Reflect, don't beat yourself up.</p>
-    <div id="reality"><div class="spinner"></div></div>
+    <div class="eyebrow">Weekly Close</div>
+    <h1>Reflect, don't beat yourself up.</h1>
+    <p class="subtitle">What actually happened this week.</p>
+
+    <div id="reality"><div class="card"><div class="spinner" style="margin: 20px auto;"></div></div></div>
 
     <div class="field">
       <label>What shipped</label>
@@ -25,17 +28,17 @@ export async function render(view) {
       <textarea id="moves" placeholder="Carryovers"></textarea>
     </div>
     <div class="field">
-      <label>Mood (1–5)</label>
+      <label>Mood</label>
       <div class="capacity-row" id="mood">
         ${[1,2,3,4,5].map(n => `<button data-m="${n}">${n}</button>`).join('')}
       </div>
     </div>
     <div class="field">
-      <label>One-line note (optional)</label>
+      <label>One-line note <span class="faint">(optional)</span></label>
       <input type="text" id="note" />
     </div>
 
-    <button class="btn" id="submit">Close the week</button>
+    <button class="btn" id="submit">Close the week ${icon('arrow', 18)}</button>
     <div id="msg"></div>
   `;
 
@@ -63,9 +66,10 @@ async function loadReality() {
     monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
     const ms = monday.toISOString().slice(0, 10);
 
-    const [priorities, checkins] = await Promise.all([
+    const [priorities, checkins, wins] = await Promise.all([
       getRows(sheetId, 'Weekly Priorities'),
-      getRows(sheetId, 'Daily Check-in')
+      getRows(sheetId, 'Daily Check-in'),
+      getRows(sheetId, 'Wins')
     ]);
     const week = priorities.slice(1).filter(r => r[0] === ms);
     const weekCheckins = checkins.slice(1).filter(r => {
@@ -76,24 +80,43 @@ async function loadReality() {
     const moved = weekCheckins.filter(r => r[6] === 'Moved').length;
     const some = weekCheckins.filter(r => r[6] === 'Some').length;
     const no = weekCheckins.filter(r => r[6] === 'No').length;
+    const weekWins = wins.slice(1).filter(r => r[0] && new Date(r[0]) >= monday);
 
     let calEvents = [];
     if (calId) {
-      try {
-        calEvents = await fetchSpineEvents(calId, monday, today);
-      } catch {}
+      try { calEvents = await fetchSpineEvents(calId, monday, today); } catch {}
     }
 
     document.getElementById('reality').innerHTML = `
-      <div class="card">
-        <h2 style="margin-top: 0;">This week's reality</h2>
-        <p style="margin-bottom: 8px;"><strong>Priorities:</strong></p>
-        <ul style="margin: 0 0 12px 20px; color: var(--ink-soft);">
-          ${week.map(r => `<li><strong>${escHtml(r[1])}:</strong> ${escHtml(r[2])}</li>`).join('') || '<li>None set</li>'}
-        </ul>
-        <p style="margin: 4px 0;"><strong>Check-ins:</strong> ${weekCheckins.length} this week</p>
-        <p style="margin: 4px 0;"><strong>Outcomes:</strong> ${moved} moved · ${some} some · ${no} no</p>
-        <p style="margin: 4px 0;"><strong>Spine calendar blocks:</strong> ${calEvents.length}</p>
+      <div class="card sage">
+        <div class="eyebrow mb-3">This week's reality</div>
+        <div class="row" style="gap: 16px; flex-wrap: wrap;">
+          <div class="stat" style="flex: 1; padding: 8px; min-width: 80px;">
+            <div class="number" style="font-size: 32px;">${weekCheckins.length}</div>
+            <div class="label">check-ins</div>
+          </div>
+          <div class="stat" style="flex: 1; padding: 8px; min-width: 80px;">
+            <div class="number" style="font-size: 32px; color: var(--terracotta);">${weekWins.length}</div>
+            <div class="label">wins</div>
+          </div>
+          <div class="stat" style="flex: 1; padding: 8px; min-width: 80px;">
+            <div class="number" style="font-size: 32px; color: var(--gold);">${calEvents.length}</div>
+            <div class="label">blocks</div>
+          </div>
+        </div>
+        <div class="mt-4">
+          <div class="eyebrow mb-2">Priorities</div>
+          ${week.length === 0 ? '<p class="muted" style="font-size: 14px;">None set</p>' :
+            week.map(r => `<div style="font-size: 14px; margin: 4px 0;"><strong style="color: var(--sage-deep);">${escHtml(r[1])}:</strong> ${escHtml(r[2])}</div>`).join('')}
+        </div>
+        <div class="mt-4">
+          <div class="eyebrow mb-2">Outcomes</div>
+          <div class="row" style="gap: 8px; font-size: 13px;">
+            <span class="chip">${moved} moved</span>
+            <span class="chip gold">${some} some</span>
+            <span class="chip warm">${no} no</span>
+          </div>
+        </div>
       </div>
     `;
   } catch (err) {
@@ -115,7 +138,7 @@ async function fetchSpineEvents(calId, start, end) {
 async function submit(view) {
   const btn = document.getElementById('submit');
   btn.disabled = true;
-  btn.textContent = 'Saving...';
+  btn.textContent = 'Saving…';
   try {
     const sheetId = getSheetId();
     const today = new Date();
@@ -127,8 +150,10 @@ async function submit(view) {
     ]);
     view.innerHTML = `
       <div class="center-screen">
+        <div class="celebrate-check">${icon('check', 40)}</div>
         <h1>Week closed.</h1>
-        <p>You showed up. That's the spine working.</p>
+        <p class="muted" style="max-width: 320px;">You showed up. That's the spine working.</p>
+        <a href="#/sunday" class="link mt-4">Sunday Decision is up next →</a>
       </div>
     `;
   } catch (err) {

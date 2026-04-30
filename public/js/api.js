@@ -25,3 +25,13 @@ export async function shrinkPriority(priority, capacity) {
   if (!res.ok) throw new Error('Parse failed');
   return res.json();
 }
+
+export async function ingestPaste(text) {
+  const res = await fetch('/api/parse', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text, mode: 'ingest-paste' })
+  });
+  if (!res.ok) throw new Error('Parse failed');
+  return res.json();
+}

@@ -1,0 +1,18 @@
+{
+  "name": "Spine",
+  "short_name": "Spine",
+  "description": "Daily anchor for the things that matter",
+  "start_url": "/#/morning",
+  "display": "standalone",
+  "background_color": "#faf6ef",
+  "theme_color": "#5b6e5a",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

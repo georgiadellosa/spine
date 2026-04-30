@@ -1,58 +1,54 @@
 import { withFreshToken } from '../auth.js';
 import { getCalendarId, getSheetId } from '../store.js';
 import { getRows } from '../google-sheets.js';
+import { icon } from '../icons.js';
 
 const API = 'https://www.googleapis.com/calendar/v3';
+const VISIBILITY_KEY = 'spine.calendarVisibility';
+
+let fcInstance = null;
+let allCalendars = [];
 
 export async function render(view) {
   view.innerHTML = `
     <h1>Calendar</h1>
-    <div id="cal-toolbar" style="display: flex; gap: 8px; margin-bottom: 12px;">
-      <button class="btn btn-ghost" data-view="dayGridMonth" style="height: 40px; padding: 0 16px;">Month</button>
-      <button class="btn btn-ghost" data-view="timeGridWeek" style="height: 40px; padding: 0 16px;">Week</button>
-      <button class="btn btn-ghost" data-view="timeGridDay" style="height: 40px; padding: 0 16px;">Day</button>
-    </div>
+    <p class="subtitle">Drag a priority below onto a slot. Tap any time to add or edit.</p>
+
     <div id="this-weeks-priorities"></div>
-    <div id="calendar-loading"><div class="spinner"></div></div>
-    <div id="calendar" style="background: var(--bg-elev); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; display: none;"></div>
-    <p class="muted" style="font-size: 13px; margin-top: 12px;">
-      Drag a priority above onto a time slot to schedule it. Tap an empty slot to add an event. Tap an event to edit or delete.
-    </p>
+
+    <div class="cal-toolbar" id="cal-toolbar">
+      <button data-view="dayGridMonth">Month</button>
+      <button data-view="timeGridWeek" class="active">Week</button>
+      <button data-view="timeGridDay">Day</button>
+    </div>
+
+    <div id="cal-visibility"></div>
+
+    <div id="calendar-loading" class="center" style="padding: 40px 0;"><div class="spinner"></div></div>
+    <div id="calendar" class="card" style="display: none; padding: 12px;"></div>
   `;
 
   await waitForFullCalendar();
   await renderPrioritiesAsCards();
-  const calendars = await listCalendars();
+  allCalendars = await listCalendars();
+  renderVisibilityToggles();
 
   document.getElementById('calendar-loading').style.display = 'none';
   document.getElementById('calendar').style.display = 'block';
 
-  const fc = new FullCalendar.Calendar(document.getElementById('calendar'), {
+  const visibility = getVisibility();
+
+  fcInstance = new FullCalendar.Calendar(document.getElementById('calendar'), {
     initialView: 'timeGridWeek',
-    height: 600,
+    height: 620,
     nowIndicator: true,
     headerToolbar: { left: 'prev,next today', center: 'title', right: '' },
     editable: true,
     droppable: true,
     slotMinTime: '07:00:00',
     slotMaxTime: '22:00:00',
-    eventSources: calendars.map(cal => ({
-      id: cal.id,
-      events: async (info, success, fail) => {
-        try {
-          const events = await fetchEvents(cal.id, info.startStr, info.endStr);
-          success(events.map(e => ({
-            id: e.id,
-            title: e.summary || '(no title)',
-            start: e.start.dateTime || e.start.date,
-            end: e.end?.dateTime || e.end?.date,
-            allDay: !e.start.dateTime,
-            color: cal.backgroundColor || '#5b6e5a',
-            extendedProps: { calendarId: cal.id }
-          })));
-        } catch (err) { fail(err); }
-      }
-    })),
+    expandRows: true,
+    eventSources: allCalendars.filter(c => visibility[c.id] !== false).map(makeSource),
     dateClick: async (info) => {
       const title = prompt('New event title?');
       if (!title) return;
@@ -60,7 +56,7 @@ export async function render(view) {
       const end = new Date(start.getTime() + 60 * 60 * 1000);
       try {
         await createEvent(getCalendarId(), title, start, end);
-        fc.refetchEvents();
+        fcInstance.refetchEvents();
       } catch (err) { alert(`Couldn't create: ${err.message}`); }
     },
     eventClick: async (info) => {
@@ -72,11 +68,11 @@ export async function render(view) {
         if (newTitle === '') {
           if (confirm('Delete this event?')) {
             await deleteEvent(calId, evId);
-            fc.refetchEvents();
+            fcInstance.refetchEvents();
           }
         } else {
           await updateEvent(calId, evId, { summary: newTitle });
-          fc.refetchEvents();
+          fcInstance.refetchEvents();
         }
       } catch (err) { alert(`Failed: ${err.message}`); }
     },
@@ -87,10 +83,7 @@ export async function render(view) {
           start: { dateTime: info.event.start.toISOString() },
           end: { dateTime: info.event.end.toISOString() }
         });
-      } catch (err) {
-        info.revert();
-        alert(`Move failed: ${err.message}`);
-      }
+      } catch (err) { info.revert(); alert(`Move failed: ${err.message}`); }
     },
     eventResize: async (info) => {
       const calId = info.event.extendedProps.calendarId;
@@ -99,26 +92,109 @@ export async function render(view) {
           start: { dateTime: info.event.start.toISOString() },
           end: { dateTime: info.event.end.toISOString() }
         });
-      } catch (err) {
-        info.revert();
-      }
+      } catch { info.revert(); }
     },
     drop: async (info) => {
       const text = info.draggedEl.dataset.priority;
       if (!text) return;
       const start = info.date;
       const end = new Date(start.getTime() + 90 * 60 * 1000);
+      const conflict = await hasConflict(start, end);
+      if (conflict && !confirm(`That slot conflicts with "${conflict}". Schedule anyway?`)) return;
       try {
         await createEvent(getCalendarId(), text, start, end);
-        fc.refetchEvents();
+        fcInstance.refetchEvents();
       } catch (err) { alert(`Couldn't create block: ${err.message}`); }
     }
   });
-  fc.render();
+  fcInstance.render();
 
-  view.querySelectorAll('button[data-view]').forEach(b => {
-    b.addEventListener('click', () => fc.changeView(b.dataset.view));
+  view.querySelectorAll('#cal-toolbar button').forEach(b => {
+    b.addEventListener('click', () => {
+      view.querySelectorAll('#cal-toolbar button').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      fcInstance.changeView(b.dataset.view);
+    });
   });
+}
+
+function makeSource(cal) {
+  return {
+    id: cal.id,
+    events: async (info, success, fail) => {
+      try {
+        const events = await fetchEvents(cal.id, info.startStr, info.endStr);
+        success(events.map(e => ({
+          id: e.id,
+          title: e.summary || '(no title)',
+          start: e.start.dateTime || e.start.date,
+          end: e.end?.dateTime || e.end?.date,
+          allDay: !e.start.dateTime,
+          color: cal.backgroundColor || '#5b6e5a',
+          extendedProps: { calendarId: cal.id }
+        })));
+      } catch (err) { fail(err); }
+    }
+  };
+}
+
+function getVisibility() {
+  try {
+    return JSON.parse(localStorage.getItem(VISIBILITY_KEY)) || {};
+  } catch { return {}; }
+}
+function setVisibility(v) {
+  localStorage.setItem(VISIBILITY_KEY, JSON.stringify(v));
+}
+
+function renderVisibilityToggles() {
+  const wrap = document.getElementById('cal-visibility');
+  const visibility = getVisibility();
+  wrap.innerHTML = `
+    <div class="card" style="margin-bottom: 16px;">
+      <div class="eyebrow mb-2">Calendars</div>
+      ${allCalendars.map(c => {
+        const on = visibility[c.id] !== false;
+        return `
+          <div class="toggle-row" data-cal="${c.id}">
+            <div class="toggle-label">
+              <span class="swatch" style="background: ${c.backgroundColor || '#5b6e5a'}"></span>
+              <span>${escHtml(c.summary)}</span>
+            </div>
+            <div class="switch ${on ? 'on' : ''}" data-cal="${c.id}"></div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+  wrap.querySelectorAll('.switch').forEach(sw => {
+    sw.addEventListener('click', () => {
+      const calId = sw.dataset.cal;
+      const v = getVisibility();
+      const newOn = !(v[calId] !== false);
+      v[calId] = newOn;
+      setVisibility(v);
+      sw.classList.toggle('on', newOn);
+      // Rebuild sources
+      if (fcInstance) {
+        fcInstance.removeAllEventSources();
+        allCalendars.filter(c => v[c.id] !== false).forEach(c => fcInstance.addEventSource(makeSource(c)));
+      }
+    });
+  });
+}
+
+async function hasConflict(start, end) {
+  try {
+    const visibility = getVisibility();
+    const visibleCals = allCalendars.filter(c => visibility[c.id] !== false);
+    for (const cal of visibleCals) {
+      const events = await fetchEvents(cal.id, start.toISOString(), end.toISOString());
+      const real = events.filter(e => e.start.dateTime); // skip all-day
+      if (real.length > 0) return real[0].summary || '(busy)';
+    }
+  } catch {}
+  return null;
 }
 
 async function waitForFullCalendar() {
@@ -142,15 +218,17 @@ async function renderPrioritiesAsCards() {
     const week = rows.slice(1).filter(r => r[0] === ms);
     const wrap = document.getElementById('this-weeks-priorities');
     if (week.length === 0) {
-      wrap.innerHTML = `<p class="muted" style="margin-bottom: 16px;">No priorities for this week yet — <a href="#/sunday" style="color: var(--accent);">run Sunday Decision</a>.</p>`;
+      wrap.innerHTML = `
+        <div class="card warm" style="text-align: center;">
+          <p style="margin: 0;">No priorities set for this week. <a href="#/sunday" class="link">Run Sunday Decision →</a></p>
+        </div>`;
       return;
     }
     wrap.innerHTML = `
-      <p class="muted" style="margin-bottom: 8px;">This week's priorities (drag onto calendar):</p>
-      <div id="drag-zone" style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px;">
+      <div class="eyebrow mb-2">This week — drag onto calendar</div>
+      <div id="drag-zone" class="row mb-4" style="flex-wrap: wrap; gap: 8px;">
         ${week.map(r => `
-          <div class="priority-drag" data-priority="${escAttr(r[2])}"
-               style="padding: 10px 14px; background: var(--accent-soft); border-radius: 999px; font-size: 14px; cursor: grab; user-select: none;">
+          <div class="priority-drag" data-priority="${escAttr(r[2])}">
             <strong>${escHtml(r[1])}:</strong> ${escHtml(r[2])}
           </div>
         `).join('')}
@@ -173,14 +251,13 @@ async function listCalendars() {
       headers: { Authorization: `Bearer ${token}` }
     });
     const data = await res.json();
-    const spineId = getCalendarId();
-    return (data.items || []).filter(c => c.selected !== false || c.id === spineId);
+    return (data.items || []).filter(c => !c.hidden);
   });
 }
 
 async function fetchEvents(calId, timeMin, timeMax) {
   return withFreshToken(async (token) => {
-    const url = `${API}/calendars/${encodeURIComponent(calId)}/events?timeMin=${timeMin}&timeMax=${timeMax}&singleEvents=true&orderBy=startTime&maxResults=250`;
+    const url = `${API}/calendars/${encodeURIComponent(calId)}/events?timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}&singleEvents=true&orderBy=startTime&maxResults=250`;
     const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
     if (!res.ok) return [];
     const data = await res.json();
