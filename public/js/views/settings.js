@@ -80,6 +80,14 @@ export async function render(view) {
     </div>
 
     <div class="card">
+      <div class="eyebrow mb-3">Spine connection</div>
+      <p class="muted" style="font-size: 13px; margin-bottom: 12px;">
+        Connect this browser to a different Spine — useful if you're switching between primary and secondary Google accounts, or want to start fresh.
+      </p>
+      <button class="btn btn-ghost" id="reconnect">${icon('refresh', 16)} Connect different Spine</button>
+    </div>
+
+    <div class="card">
       <div class="eyebrow mb-3">Account</div>
       <button class="btn btn-ghost" id="signout">${icon('signOut', 16)} Sign out</button>
       <p class="faint mt-3" style="line-height: 1.5;">
@@ -93,6 +101,12 @@ export async function render(view) {
     signOut();
     clearAll();
     navigate('login');
+  });
+
+  document.getElementById('reconnect').addEventListener('click', () => {
+    if (!confirm('This will clear the current Spine connection from this browser. Your data stays safe in Google. Continue?')) return;
+    clearAll();
+    navigate('setup');
   });
 
   document.getElementById('paste-btn').addEventListener('click', async () => {
