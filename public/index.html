@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta name="theme-color" content="#5b6e5a">
+  <title>Spine</title>
+  <link rel="stylesheet" href="/styles/main.css">
+</head>
+<body>
+  <div id="app">
+    <main id="view">
+      <div class="center-screen"><div class="spinner"></div></div>
+    </main>
+    <nav id="nav" hidden>
+      <a href="#/morning" data-route="morning">Morning</a>
+      <a href="#/evening" data-route="evening">Evening</a>
+      <a href="#/calendar" data-route="calendar">Cal</a>
+      <a href="#/wins" data-route="wins">Wins</a>
+      <a href="#/settings" data-route="settings">More</a>
+    </nav>
+  </div>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="/config.js"></script>
+  <script type="module" src="/js/main.js"></script>
+</body>
+</html>
