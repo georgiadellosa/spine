@@ -1,7 +1,7 @@
 {
-  "name": "Hands",
-  "short_name": "Hands",
-  "description": "Where your money actually goes",
+  "name": "Pots",
+  "short_name": "Pots",
+  "description": "Sinking funds, runway, where the money's going",
   "start_url": "/#/money",
   "display": "standalone",
   "background_color": "#faf6ef",

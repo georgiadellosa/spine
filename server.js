@@ -13,13 +13,15 @@ const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPE
 app.use(express.json({ limit: '5mb' }));
 
 // Hostname → app routing
+// Maps body-part subdomain → app directory name.
+// (Body parts are hands/head/heart/hearth; apps within them are Pots/Untangle/Tend/TwoNests.)
 function appForHost(host) {
   if (!host) return 'spine';
   const h = host.toLowerCase();
-  if (h.startsWith('hands.')) return 'hands';
-  if (h.startsWith('head.')) return 'head';
-  if (h.startsWith('heart.')) return 'heart';
-  if (h.startsWith('hearth.')) return 'hearth';
+  if (h.startsWith('hands.') || h.startsWith('pots.')) return 'pots';
+  if (h.startsWith('head.') || h.startsWith('untangle.')) return 'head';
+  if (h.startsWith('heart.') || h.startsWith('tend.')) return 'heart';
+  if (h.startsWith('hearth.') || h.startsWith('twonests.')) return 'hearth';
   return 'spine';
 }
 
@@ -27,10 +29,10 @@ function appForHost(host) {
 app.get('/config.js', (req, res) => {
   const target = appForHost(req.hostname);
   res.type('application/javascript');
-  if (target === 'hands') {
-    res.send(`window.__HANDS_CONFIG__ = ${JSON.stringify({
+  if (target === 'pots') {
+    res.send(`window.__POTS_CONFIG__ = ${JSON.stringify({
       googleClientId: process.env.GOOGLE_CLIENT_ID || '',
-      appUrl: process.env.HANDS_APP_URL || `https://hands.thewebbybrain.com`
+      appUrl: process.env.POTS_APP_URL || `https://hands.thewebbybrain.com`
     })};`);
   } else {
     res.send(`window.__SPINE_CONFIG__ = ${JSON.stringify({

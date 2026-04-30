@@ -62,7 +62,7 @@ export async function createBudgetSheet() {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        properties: { title: 'Hands' },
+        properties: { title: 'Pots' },
         sheets: TABS.map((tab, i) => ({ properties: { sheetId: i, title: tab.name } }))
       })
     });

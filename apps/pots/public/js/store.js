@@ -1,9 +1,9 @@
 const KEYS = {
-  sheetId: 'hands.sheetId',
-  driveFolderId: 'hands.driveFolderId',
-  setupComplete: 'hands.setupComplete',
-  spineSheetId: 'hands.spineSheetId',  // optional: write wins back to spine
-  budgetUrl: 'hands.appUrl'
+  sheetId: 'pots.sheetId',
+  driveFolderId: 'pots.driveFolderId',
+  setupComplete: 'pots.setupComplete',
+  spineSheetId: 'pots.spineSheetId',  // optional: write wins back to spine
+  budgetUrl: 'pots.appUrl'
 };
 
 export const getSheetId = () => localStorage.getItem(KEYS.sheetId);

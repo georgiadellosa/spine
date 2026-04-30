@@ -17,7 +17,7 @@ export async function initAuth() {
     };
     check();
   });
-  const cfg = window.__HANDS_CONFIG__ || {};
+  const cfg = window.__POTS_CONFIG__ || {};
   if (!cfg.googleClientId) {
     throw new Error('GOOGLE_CLIENT_ID not set on server');
   }

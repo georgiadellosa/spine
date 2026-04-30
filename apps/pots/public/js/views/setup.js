@@ -9,7 +9,7 @@ export async function render(view) {
     <div class="center-screen">
       <div class="icon-large" style="color: var(--gold);">${icon('coin', 64)}</div>
       <h1>Get started</h1>
-      <p style="max-width: 360px;">Looking for an existing Hands spreadsheet in your Drive…</p>
+      <p style="max-width: 360px;">Looking for an existing Pots spreadsheet in your Drive…</p>
       <div class="spinner"></div>
     </div>
   `;
@@ -21,10 +21,10 @@ export async function render(view) {
     view.innerHTML = `
       <div class="center-screen">
         <div class="icon-large" style="color: var(--gold);">${icon('coin', 64)}</div>
-        <h1>Found your Hands</h1>
+        <h1>Found your Pots</h1>
         <p style="max-width: 360px;">There's already a "Hands" spreadsheet in your Drive (last modified ${formatDate(found.modifiedTime)}). Connect this browser to it?</p>
         <div style="max-width: 360px; width: 100%; display: flex; flex-direction: column; gap: 12px;">
-          <button class="btn" id="auto-connect" style="background: var(--gold);">${icon('check', 18)} Connect to existing Hands</button>
+          <button class="btn" id="auto-connect" style="background: var(--gold);">${icon('check', 18)} Connect to existing Pots</button>
           <button class="btn btn-ghost" id="new-setup">${icon('coin', 18)} No, set up a new one</button>
         </div>
       </div>
@@ -37,7 +37,7 @@ export async function render(view) {
     view.innerHTML = `
       <div class="center-screen">
         <div class="icon-large" style="color: var(--gold);">${icon('coin', 64)}</div>
-        <h1>${existing.length} Hands sheets found</h1>
+        <h1>${existing.length} Pots sheets found</h1>
         <p style="max-width: 360px;">Pick the one to use, or create a fresh one.</p>
         <div style="max-width: 480px; width: 100%; display: flex; flex-direction: column; gap: 8px;">
           ${existing.map((s, i) => `
@@ -48,7 +48,7 @@ export async function render(view) {
               </div>
             </button>
           `).join('')}
-          <button class="btn" id="new-setup" style="margin-top: 12px; background: var(--gold);">${icon('coin', 18)} Set up brand new Hands</button>
+          <button class="btn" id="new-setup" style="margin-top: 12px; background: var(--gold);">${icon('coin', 18)} Set up brand new Pots</button>
         </div>
       </div>
     `;
@@ -59,7 +59,7 @@ export async function render(view) {
     return;
   }
 
-  // No existing Hands sheet — go straight to create
+  // No existing Pots sheet — go straight to create
   await createNew(view);
 }
 
@@ -67,7 +67,7 @@ async function createNew(view) {
   view.innerHTML = `
     <div class="center-screen">
       <div class="icon-large" style="color: var(--gold);">${icon('coin', 64)}</div>
-      <h1>Setting up Hands</h1>
+      <h1>Setting up Pots</h1>
       <p style="max-width: 320px;">Creating a Hands spreadsheet in your Google account, with sensible default categories. Takes a few seconds.</p>
       <div class="spinner"></div>
     </div>
@@ -88,7 +88,7 @@ async function autoConnect(view, sheet) {
   try {
     setSheetId(sheet.id);
     setSetupComplete();
-    showSuccess(view, 'Connected.', 'This browser is now linked to your existing Hands.');
+    showSuccess(view, 'Connected.', 'This browser is now linked to your existing Pots.');
   } catch (err) {
     showError(view, err.message);
   }
