@@ -1,4 +1,5 @@
 import { withFreshToken } from './auth.js';
+import { getRitualTimes } from './store.js';
 
 const API = 'https://www.googleapis.com/calendar/v3';
 
@@ -27,32 +28,12 @@ export async function createSpineCalendar() {
 export async function createRecurringRituals(calendarId) {
   return withFreshToken(async (token) => {
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const times = getRitualTimes();
     const today = new Date(); today.setHours(0, 0, 0, 0);
-    const nextMonday = nextDayOfWeek(today, 1);
-    const nextSunday = nextDayOfWeek(today, 0);
-    const nextFriday = nextDayOfWeek(today, 5);
     const events = [
-      {
-        summary: 'Daily Check-in',
-        description: 'Morning ritual: capacity + priority + free time',
-        start: { dateTime: setTime(nextMonday, 7, 0).toISOString(), timeZone: tz },
-        end: { dateTime: setTime(nextMonday, 7, 5).toISOString(), timeZone: tz },
-        recurrence: ['RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR']
-      },
-      {
-        summary: 'Sunday Decision',
-        description: 'Brain dump → triage → pick three priorities for the week',
-        start: { dateTime: setTime(nextSunday, 19, 0).toISOString(), timeZone: tz },
-        end: { dateTime: setTime(nextSunday, 19, 30).toISOString(), timeZone: tz },
-        recurrence: ['RRULE:FREQ=WEEKLY;BYDAY=SU']
-      },
-      {
-        summary: 'Friday Close',
-        description: 'Weekly close: shipped, stuck, moves',
-        start: { dateTime: setTime(nextFriday, 17, 0).toISOString(), timeZone: tz },
-        end: { dateTime: setTime(nextFriday, 17, 20).toISOString(), timeZone: tz },
-        recurrence: ['RRULE:FREQ=WEEKLY;BYDAY=FR']
-      }
+      ritualEvent('Daily Check-in', 'Morning ritual: capacity + priority + free time', nextDayOfWeek(today, 1), times.daily, 'RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR', tz),
+      ritualEvent('Sunday Decision', 'Brain dump → triage → pick three priorities for the week', nextDayOfWeek(today, 0), times.sunday, 'RRULE:FREQ=WEEKLY;BYDAY=SU', tz),
+      ritualEvent('Friday Close', 'Weekly close: shipped, stuck, moves', nextDayOfWeek(today, 5), times.friday, 'RRULE:FREQ=WEEKLY;BYDAY=FR', tz)
     ];
     for (const ev of events) {
       const res = await fetch(`${API}/calendars/${encodeURIComponent(calendarId)}/events`, {
@@ -63,6 +44,55 @@ export async function createRecurringRituals(calendarId) {
       if (!res.ok) console.error(`Ritual ${ev.summary}: ${await res.text()}`);
     }
   });
+}
+
+function ritualEvent(summary, description, day, times, rrule, tz) {
+  const start = new Date(day); start.setHours(times.hour, times.min, 0, 0);
+  const end = new Date(start.getTime() + times.duration * 60 * 1000);
+  return {
+    summary, description,
+    start: { dateTime: start.toISOString(), timeZone: tz },
+    end: { dateTime: end.toISOString(), timeZone: tz },
+    recurrence: [rrule]
+  };
+}
+
+export async function findRitualEventIds(calendarId) {
+  return withFreshToken(async (token) => {
+    const today = new Date();
+    const fortnightAgo = new Date(today); fortnightAgo.setDate(today.getDate() - 14);
+    const fortnightAhead = new Date(today); fortnightAhead.setDate(today.getDate() + 14);
+    const url = `${API}/calendars/${encodeURIComponent(calendarId)}/events?timeMin=${fortnightAgo.toISOString()}&timeMax=${fortnightAhead.toISOString()}&singleEvents=false&maxResults=100`;
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) return {};
+    const data = await res.json();
+    const map = {};
+    for (const e of data.items || []) {
+      if (!e.recurrence) continue;
+      if (e.summary === 'Daily Check-in') map.daily = e.id;
+      else if (e.summary === 'Sunday Decision') map.sunday = e.id;
+      else if (e.summary === 'Friday Close') map.friday = e.id;
+    }
+    return map;
+  });
+}
+
+export async function deleteRitualEvents(calendarId, ids) {
+  return withFreshToken(async (token) => {
+    for (const id of Object.values(ids)) {
+      if (!id) continue;
+      await fetch(`${API}/calendars/${encodeURIComponent(calendarId)}/events/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      }).catch(() => {});
+    }
+  });
+}
+
+export async function rebuildRituals(calendarId) {
+  const existing = await findRitualEventIds(calendarId);
+  await deleteRitualEvents(calendarId, existing);
+  await createRecurringRituals(calendarId);
 }
 
 export async function createPriorityBlock(calendarId, title, durationMins = 90) {
@@ -116,10 +146,27 @@ export async function getTodayBusyMinutes(calendarIds = ['primary']) {
   });
 }
 
-function setTime(date, h, m) {
-  const d = new Date(date);
-  d.setHours(h, m, 0, 0);
-  return d;
+export async function getEventsForDate(calendarId, date) {
+  return withFreshToken(async (token) => {
+    const start = new Date(date); start.setHours(0, 0, 0, 0);
+    const end = new Date(date); end.setHours(23, 59, 59, 999);
+    const url = `${API}/calendars/${encodeURIComponent(calendarId)}/events?timeMin=${start.toISOString()}&timeMax=${end.toISOString()}&singleEvents=true`;
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.items || [];
+  });
+}
+
+export async function listCalendars() {
+  return withFreshToken(async (token) => {
+    const res = await fetch(`${API}/users/me/calendarList`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data.items || []).filter(c => !c.hidden);
+  });
 }
 
 function nextDayOfWeek(from, dow) {

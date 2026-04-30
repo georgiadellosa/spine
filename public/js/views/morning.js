@@ -1,14 +1,13 @@
 import { appendRow, getRows } from '../google-sheets.js';
-import { getTodayBusyMinutes, createPriorityBlock } from '../google-calendar.js';
+import { getTodayBusyMinutes, createPriorityBlock, getEventsForDate } from '../google-calendar.js';
 import { shrinkPriority } from '../api.js';
-import { getSheetId, getCalendarId, setLastCheckin } from '../store.js';
-import { navigate } from '../router.js';
+import { getSheetId, getCalendarId, getCustodyCalendarId, setLastCheckin } from '../store.js';
 import { icon } from '../icons.js';
 
-let state = { capacity: null, dayType: null, priority: '', freeTime: null, feels: '', staleDays: 0 };
+let state = { capacity: null, dayType: null, priority: '', freeTime: null, feels: '', sleep: '' };
 
 export async function render(view) {
-  state = { capacity: null, dayType: null, priority: '', freeTime: null, feels: '', staleDays: 0 };
+  state = { capacity: null, dayType: null, priority: '', freeTime: null, feels: '', sleep: '' };
   const today = new Date();
   const greeting = greetingFor(today);
 
@@ -16,6 +15,8 @@ export async function render(view) {
     <div class="eyebrow">${formatToday(today)}</div>
     <h1>${greeting}</h1>
     <p class="subtitle">A few seconds. Then you're done.</p>
+
+    <div id="ritual-banner"></div>
 
     <div class="field">
       <label>Capacity right now</label>
@@ -32,6 +33,12 @@ export async function render(view) {
         <button data-type="Kid Day">Kid</button>
         <button data-type="Handover Day">Handover</button>
       </div>
+      <div id="day-type-suggestion" class="help"></div>
+    </div>
+
+    <div class="field">
+      <label>Hours of sleep last night <span class="faint">(optional)</span></label>
+      <input type="number" id="sleep" placeholder="e.g. 7" min="0" max="14" step="0.5" />
     </div>
 
     <div class="field">
@@ -50,10 +57,7 @@ export async function render(view) {
       <input type="text" id="feels" placeholder="quiet · focused · slow · gentle" autocomplete="off" />
     </div>
 
-    <button class="btn" id="submit" disabled>
-      Lock it in
-      ${icon('arrow', 18)}
-    </button>
+    <button class="btn" id="submit" disabled>Lock it in ${icon('arrow', 18)}</button>
     <div id="msg"></div>
 
     <div class="row mt-5" style="justify-content: center; gap: 16px;">
@@ -63,7 +67,9 @@ export async function render(view) {
     </div>
   `;
 
+  renderRitualBanner();
   await suggestPriority();
+  await suggestDayType();
 
   getTodayBusyMinutes().then(mins => {
     state.freeTime = Math.round(mins);
@@ -86,9 +92,7 @@ export async function render(view) {
       try {
         const result = await shrinkPriority(state.priority, state.capacity);
         sug.innerHTML = `<span class="chip warm" style="margin-top: 8px;">Smaller: ${escHtml(result.smaller_version)}</span>`;
-      } catch {
-        sug.textContent = '';
-      }
+      } catch { sug.textContent = ''; }
     }
   });
 
@@ -108,7 +112,73 @@ export async function render(view) {
   document.getElementById('feels').addEventListener('input', (e) => {
     state.feels = e.target.value.trim();
   });
+  document.getElementById('sleep').addEventListener('input', (e) => {
+    state.sleep = e.target.value;
+  });
   document.getElementById('submit').addEventListener('click', () => submit(view));
+}
+
+function renderRitualBanner() {
+  const today = new Date();
+  const dow = today.getDay();
+  const candidates = [];
+  // Sunday Decision
+  candidates.push({ name: 'Sunday Decision', route: 'sunday', daysAway: (0 - dow + 7) % 7 });
+  // Friday Close
+  candidates.push({ name: 'Friday Close', route: 'friday', daysAway: (5 - dow + 7) % 7 });
+  // Pick the soonest
+  const next = candidates.sort((a, b) => a.daysAway - b.daysAway)[0];
+  const banner = document.getElementById('ritual-banner');
+  if (next.daysAway === 0) {
+    banner.innerHTML = `
+      <div class="info" style="margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
+        <span>${icon('refresh', 14)} <strong>${next.name}</strong> is today</span>
+        <a href="#/${next.route}" class="link" style="font-size: 13px;">Start →</a>
+      </div>`;
+  } else if (next.daysAway === 1) {
+    banner.innerHTML = `
+      <div class="card" style="margin-bottom: 16px; padding: 10px 14px; background: var(--paper-2); border: 1px solid var(--sand);">
+        <span class="muted" style="font-size: 13px;">${next.name} tomorrow</span>
+      </div>`;
+  } else if (next.daysAway <= 3) {
+    banner.innerHTML = `
+      <div style="margin-bottom: 16px;">
+        <span class="faint" style="font-size: 13px;">${next.name} in ${next.daysAway} days</span>
+      </div>`;
+  }
+}
+
+async function suggestDayType() {
+  const custodyCalId = getCustodyCalendarId();
+  const sug = document.getElementById('day-type-suggestion');
+  if (!custodyCalId) {
+    sug.innerHTML = `<a href="#/settings" class="link" style="font-size: 12px;">Set a custody calendar to auto-fill →</a>`;
+    return;
+  }
+  try {
+    const events = await getEventsForDate(custodyCalId, new Date());
+    if (events.length === 0) {
+      autoSelectDayType('Solo Day', 'no events on custody calendar today');
+      return;
+    }
+    const titles = events.map(e => (e.summary || '').toLowerCase()).join(' ');
+    if (titles.includes('handover') || titles.includes('changeover') || titles.includes('swap')) {
+      autoSelectDayType('Handover Day', 'detected from custody calendar');
+    } else {
+      autoSelectDayType('Kid Day', 'kid events on custody calendar today');
+    }
+  } catch {
+    sug.textContent = '';
+  }
+}
+
+function autoSelectDayType(type, reason) {
+  state.dayType = type;
+  document.querySelectorAll('#day-type button').forEach(b =>
+    b.classList.toggle('selected', b.dataset.type === type));
+  document.getElementById('day-type-suggestion').innerHTML =
+    `<span style="color: var(--sage);">${icon('check', 12)} ${type} — ${reason}. Tap to change.</span>`;
+  updateSubmit();
 }
 
 async function suggestPriority() {
@@ -139,10 +209,8 @@ async function suggestPriority() {
     const match = weekRows.find(r => r[1] === domain);
     const choice = match || weekRows[0];
 
-    // Auto-rollover detection: priority unmoved 3 days running?
     const recentCheckins = checkins.slice(1).filter(r => r[4] === choice[2]).slice(-3);
     const allNo = recentCheckins.length >= 3 && recentCheckins.every(r => r[6] === 'No');
-    state.staleDays = allNo ? recentCheckins.length : 0;
 
     if (choice && choice[2]) {
       document.getElementById('priority').value = choice[2];
@@ -180,7 +248,7 @@ async function submit(view) {
       state.freeTime || '', '', '', '', now
     ]);
     await appendRow(sheetId, 'Capacity Log', [
-      today, state.capacity, '', '', state.dayType, state.feels || ''
+      today, state.capacity, '', state.sleep || '', state.dayType, state.feels || ''
     ]);
 
     if (calId && state.priority) {
@@ -221,5 +289,5 @@ function formatToday(d) {
   return d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
 }
 function escHtml(s) {
-  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }

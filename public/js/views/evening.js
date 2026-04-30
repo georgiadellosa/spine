@@ -4,10 +4,10 @@ import { uploadAudioToDrive } from '../google-drive.js';
 import { whisperTranscribe } from '../api.js';
 import { icon } from '../icons.js';
 
-let state = { outcome: null, win: '', voiceMemoUrl: '' };
+let state = { outcome: null, win: '', voiceMemoUrl: '', mood: null };
 
 export async function render(view) {
-  state = { outcome: null, win: '', voiceMemoUrl: '' };
+  state = { outcome: null, win: '', voiceMemoUrl: '', mood: null };
   const today = new Date().toISOString().slice(0, 10);
   const sheetId = getSheetId();
 
@@ -52,6 +52,14 @@ export async function render(view) {
     `}
 
     <div class="field">
+      <label>How are you feeling now? <span class="faint">(1–5)</span></label>
+      <div class="capacity-row" id="mood">
+        ${[1,2,3,4,5].map(n => `<button data-m="${n}">${n}</button>`).join('')}
+      </div>
+      <div class="help">1 = drained · 5 = good</div>
+    </div>
+
+    <div class="field">
       <label>Log a win <span class="faint">(anything counts)</span></label>
       <input type="text" id="win" placeholder="read 1 paragraph · made dinner · stepped outside" autocomplete="off" />
     </div>
@@ -78,6 +86,17 @@ export async function render(view) {
   document.getElementById('win').addEventListener('input', (e) => {
     state.win = e.target.value.trim();
   });
+
+  const moodEl = document.getElementById('mood');
+  if (moodEl) {
+    moodEl.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-m]');
+      if (!btn) return;
+      state.mood = parseInt(btn.dataset.m);
+      document.querySelectorAll('#mood button').forEach(b =>
+        b.classList.toggle('selected', b.dataset.m === btn.dataset.m));
+    });
+  }
 
   setupMic();
   document.getElementById('submit').addEventListener('click', () => submit(view, todayRow, todayRowIndex));
@@ -142,6 +161,7 @@ async function submit(view, todayRow, todayRowIndex) {
     if (todayRow && todayRowIndex > 0) {
       const updated = [...todayRow];
       while (updated.length < 10) updated.push('');
+      updated[3] = state.mood || updated[3] || '';
       updated[6] = state.outcome || updated[6] || '';
       updated[7] = state.win || updated[7] || '';
       updated[8] = state.voiceMemoUrl || updated[8] || '';
@@ -149,6 +169,22 @@ async function submit(view, todayRow, todayRowIndex) {
     }
     if (state.win) {
       await appendRow(sheetId, 'Wins', [today, state.win, '', now]);
+    }
+    if (state.mood !== null) {
+      // Find today's Capacity Log row and update PM
+      try {
+        const capRows = await getRows(sheetId, 'Capacity Log');
+        let foundIdx = -1;
+        capRows.forEach((r, i) => { if (r[0] === today) foundIdx = i + 1; });
+        if (foundIdx > 0) {
+          const r = [...capRows[foundIdx - 1]];
+          while (r.length < 6) r.push('');
+          r[2] = state.mood;
+          await updateRow(sheetId, 'Capacity Log', foundIdx, r);
+        } else {
+          await appendRow(sheetId, 'Capacity Log', [today, '', state.mood, '', '', '']);
+        }
+      } catch {}
     }
 
     view.innerHTML = `
