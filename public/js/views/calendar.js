@@ -1,257 +1,302 @@
+// TwoNests-style week calendar — single week at a time, day cards stacked,
+// events as compact chips. No FullCalendar dependency.
 import { withFreshToken } from '../auth.js';
 import { getCalendarId, getSheetId } from '../store.js';
 import { getRows } from '../google-sheets.js';
+import { listCalendars } from '../google-calendar.js';
 import { icon } from '../icons.js';
+import { confirmDialog, alertDialog } from '../dialog.js';
+import { eventModal } from '../event-modal.js';
 
 const API = 'https://www.googleapis.com/calendar/v3';
 const VISIBILITY_KEY = 'spine.calendarVisibility';
+const DAY_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const DAY_SHORT = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
-let fcInstance = null;
+let weekStart = startOfWeek(new Date());
 let allCalendars = [];
+let calendarColorMap = {};
+let weekEvents = [];
+let priorities = [];
 
 export async function render(view) {
+  weekStart = startOfWeek(new Date());
   view.innerHTML = `
-    <h1>Calendar</h1>
-    <p class="subtitle">Drag a priority below onto a slot. Tap any time to add or edit.</p>
-
-    <div id="this-weeks-priorities"></div>
-
-    <div class="cal-toolbar" id="cal-toolbar">
-      <button data-view="dayGridMonth">Month</button>
-      <button data-view="timeGridWeek" class="active">Week</button>
-      <button data-view="timeGridDay">Day</button>
+    <div class="cal-week-header">
+      <button class="cal-nav-btn" id="cal-prev" aria-label="Previous week">‹</button>
+      <div class="cal-range" id="cal-range">Loading…</div>
+      <button class="cal-nav-btn" id="cal-next" aria-label="Next week">›</button>
+    </div>
+    <div class="row" style="justify-content: center; margin-top: 4px; margin-bottom: 16px;">
+      <button class="link" id="cal-today" style="background: none; border: none; cursor: pointer; font-size: 13px; padding: 4px 12px;">Today</button>
     </div>
 
-    <div id="cal-visibility"></div>
+    <div id="cal-priorities"></div>
+    <div id="cal-content"><div class="spinner" style="margin: 40px auto;"></div></div>
 
-    <div id="calendar-loading" class="center" style="padding: 40px 0;"><div class="spinner"></div></div>
-    <div id="calendar" class="card" style="display: none; padding: 12px;"></div>
+    <details class="card" style="margin-top: 16px; padding: 0;" id="cal-toggles">
+      <summary style="padding: 14px 18px; cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center;">
+        <span class="eyebrow" style="margin: 0;">Calendar visibility</span>
+        <span class="muted">▾</span>
+      </summary>
+      <div id="cal-toggles-list" style="padding: 0 18px 16px;"></div>
+    </details>
   `;
 
-  await waitForFullCalendar();
-  await renderPrioritiesAsCards();
+  document.getElementById('cal-prev').addEventListener('click', () => {
+    weekStart = addDays(weekStart, -7);
+    refresh();
+  });
+  document.getElementById('cal-next').addEventListener('click', () => {
+    weekStart = addDays(weekStart, 7);
+    refresh();
+  });
+  document.getElementById('cal-today').addEventListener('click', () => {
+    weekStart = startOfWeek(new Date());
+    refresh();
+  });
+
   allCalendars = await listCalendars();
-  renderVisibilityToggles();
-
-  document.getElementById('calendar-loading').style.display = 'none';
-  document.getElementById('calendar').style.display = 'block';
-
-  const visibility = getVisibility();
-
-  fcInstance = new FullCalendar.Calendar(document.getElementById('calendar'), {
-    initialView: 'timeGridWeek',
-    height: 620,
-    nowIndicator: true,
-    headerToolbar: { left: 'prev,next today', center: 'title', right: '' },
-    editable: true,
-    droppable: true,
-    slotMinTime: '07:00:00',
-    slotMaxTime: '22:00:00',
-    expandRows: true,
-    eventSources: allCalendars.filter(c => visibility[c.id] !== false).map(makeSource),
-    dateClick: async (info) => {
-      const title = prompt('New event title?');
-      if (!title) return;
-      const start = info.date;
-      const end = new Date(start.getTime() + 60 * 60 * 1000);
-      try {
-        await createEvent(getCalendarId(), title, start, end);
-        fcInstance.refetchEvents();
-      } catch (err) { alert(`Couldn't create: ${err.message}`); }
-    },
-    eventClick: async (info) => {
-      const calId = info.event.extendedProps.calendarId;
-      const evId = info.event.id;
-      const newTitle = prompt('Edit title (empty = delete, cancel = nothing):', info.event.title);
-      if (newTitle === null) return;
-      try {
-        if (newTitle === '') {
-          if (confirm('Delete this event?')) {
-            await deleteEvent(calId, evId);
-            fcInstance.refetchEvents();
-          }
-        } else {
-          await updateEvent(calId, evId, { summary: newTitle });
-          fcInstance.refetchEvents();
-        }
-      } catch (err) { alert(`Failed: ${err.message}`); }
-    },
-    eventDrop: async (info) => {
-      const calId = info.event.extendedProps.calendarId;
-      try {
-        await updateEvent(calId, info.event.id, {
-          start: { dateTime: info.event.start.toISOString() },
-          end: { dateTime: info.event.end.toISOString() }
-        });
-      } catch (err) { info.revert(); alert(`Move failed: ${err.message}`); }
-    },
-    eventResize: async (info) => {
-      const calId = info.event.extendedProps.calendarId;
-      try {
-        await updateEvent(calId, info.event.id, {
-          start: { dateTime: info.event.start.toISOString() },
-          end: { dateTime: info.event.end.toISOString() }
-        });
-      } catch { info.revert(); }
-    },
-    drop: async (info) => {
-      const text = info.draggedEl.dataset.priority;
-      if (!text) return;
-      const start = info.date;
-      const end = new Date(start.getTime() + 90 * 60 * 1000);
-      const conflict = await hasConflict(start, end);
-      if (conflict && !confirm(`That slot conflicts with "${conflict}". Schedule anyway?`)) return;
-      try {
-        await createEvent(getCalendarId(), text, start, end);
-        fcInstance.refetchEvents();
-      } catch (err) { alert(`Couldn't create block: ${err.message}`); }
-    }
-  });
-  fcInstance.render();
-
-  view.querySelectorAll('#cal-toolbar button').forEach(b => {
-    b.addEventListener('click', () => {
-      view.querySelectorAll('#cal-toolbar button').forEach(x => x.classList.remove('active'));
-      b.classList.add('active');
-      fcInstance.changeView(b.dataset.view);
-    });
-  });
-}
-
-function makeSource(cal) {
-  return {
-    id: cal.id,
-    events: async (info, success, fail) => {
-      try {
-        const events = await fetchEvents(cal.id, info.startStr, info.endStr);
-        success(events.map(e => ({
-          id: e.id,
-          title: e.summary || '(no title)',
-          start: e.start.dateTime || e.start.date,
-          end: e.end?.dateTime || e.end?.date,
-          allDay: !e.start.dateTime,
-          color: cal.backgroundColor || '#5b6e5a',
-          extendedProps: { calendarId: cal.id }
-        })));
-      } catch (err) { fail(err); }
-    }
-  };
+  calendarColorMap = Object.fromEntries(allCalendars.map(c => [c.id, c.backgroundColor || '#5b6e5a']));
+  renderToggles();
+  await loadPriorities();
+  await refresh();
 }
 
 function getVisibility() {
-  try {
-    return JSON.parse(localStorage.getItem(VISIBILITY_KEY)) || {};
-  } catch { return {}; }
+  try { return JSON.parse(localStorage.getItem(VISIBILITY_KEY)) || {}; } catch { return {}; }
 }
-function setVisibility(v) {
-  localStorage.setItem(VISIBILITY_KEY, JSON.stringify(v));
-}
+function setVisibility(v) { localStorage.setItem(VISIBILITY_KEY, JSON.stringify(v)); }
 
-function renderVisibilityToggles() {
-  const wrap = document.getElementById('cal-visibility');
+function renderToggles() {
   const visibility = getVisibility();
-  wrap.innerHTML = `
-    <div class="card" style="margin-bottom: 16px;">
-      <div class="eyebrow mb-2">Calendars</div>
-      ${allCalendars.map(c => {
-        const on = visibility[c.id] !== false;
-        return `
-          <div class="toggle-row" data-cal="${c.id}">
-            <div class="toggle-label">
-              <span class="swatch" style="background: ${c.backgroundColor || '#5b6e5a'}"></span>
-              <span>${escHtml(c.summary)}</span>
-            </div>
-            <div class="switch ${on ? 'on' : ''}" data-cal="${c.id}"></div>
-          </div>
-        `;
-      }).join('')}
-    </div>
-  `;
-  wrap.querySelectorAll('.switch').forEach(sw => {
+  document.getElementById('cal-toggles-list').innerHTML = allCalendars.map(c => {
+    const on = visibility[c.id] !== false;
+    return `
+      <div class="toggle-row" data-cal="${escAttr(c.id)}">
+        <div class="toggle-label">
+          <span class="swatch" style="background: ${escAttr(c.backgroundColor || '#5b6e5a')}"></span>
+          <span>${escHtml(c.summary)}</span>
+        </div>
+        <div class="switch ${on ? 'on' : ''}" data-cal="${escAttr(c.id)}"></div>
+      </div>
+    `;
+  }).join('');
+  document.querySelectorAll('#cal-toggles-list .switch').forEach(sw => {
     sw.addEventListener('click', () => {
       const calId = sw.dataset.cal;
       const v = getVisibility();
-      const newOn = !(v[calId] !== false);
-      v[calId] = newOn;
+      v[calId] = !(v[calId] !== false);
       setVisibility(v);
-      sw.classList.toggle('on', newOn);
-      // Rebuild sources
-      if (fcInstance) {
-        fcInstance.removeAllEventSources();
-        allCalendars.filter(c => v[c.id] !== false).forEach(c => fcInstance.addEventSource(makeSource(c)));
-      }
+      sw.classList.toggle('on', v[calId]);
+      refresh();
     });
   });
 }
 
-async function hasConflict(start, end) {
-  try {
-    const visibility = getVisibility();
-    const visibleCals = allCalendars.filter(c => visibility[c.id] !== false);
-    for (const cal of visibleCals) {
-      const events = await fetchEvents(cal.id, start.toISOString(), end.toISOString());
-      const real = events.filter(e => e.start.dateTime); // skip all-day
-      if (real.length > 0) return real[0].summary || '(busy)';
-    }
-  } catch {}
-  return null;
-}
-
-async function waitForFullCalendar() {
-  return new Promise(resolve => {
-    const check = () => {
-      if (window.FullCalendar) resolve();
-      else setTimeout(check, 50);
-    };
-    check();
-  });
-}
-
-async function renderPrioritiesAsCards() {
+async function loadPriorities() {
   try {
     const sheetId = getSheetId();
     const rows = await getRows(sheetId, 'Weekly Priorities');
-    const today = new Date();
-    const monday = new Date(today);
-    monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
-    const ms = monday.toISOString().slice(0, 10);
-    const week = rows.slice(1).filter(r => r[0] === ms);
-    const wrap = document.getElementById('this-weeks-priorities');
-    if (week.length === 0) {
-      wrap.innerHTML = `
-        <div class="card warm" style="text-align: center;">
-          <p style="margin: 0;">No priorities set for this week. <a href="#/sunday" class="link">Run Sunday Decision →</a></p>
-        </div>`;
-      return;
-    }
-    wrap.innerHTML = `
-      <div class="eyebrow mb-2">This week — drag onto calendar</div>
-      <div id="drag-zone" class="row mb-4" style="flex-wrap: wrap; gap: 8px;">
-        ${week.map(r => `
-          <div class="priority-drag" data-priority="${escAttr(r[2])}">
-            <strong>${escHtml(r[1])}:</strong> ${escHtml(r[2])}
-          </div>
-        `).join('')}
-      </div>
-    `;
-    if (window.FullCalendar?.Draggable) {
-      new FullCalendar.Draggable(document.getElementById('drag-zone'), {
-        itemSelector: '.priority-drag',
-        eventData: (el) => ({ title: el.dataset.priority, duration: '01:30' })
-      });
-    }
+    const monday = startOfWeek(new Date());
+    const ms = isoDate(monday);
+    priorities = rows.slice(1).filter(r => r[0] === ms);
+    renderPrioritiesBar();
+  } catch {}
+}
+
+function renderPrioritiesBar() {
+  const wrap = document.getElementById('cal-priorities');
+  if (priorities.length === 0) {
+    wrap.innerHTML = `<div class="card warm" style="padding: 12px 14px; text-align: center; margin-bottom: 16px;">
+      <span style="font-size: 13px;">No priorities for this week. <a href="#/sunday" class="link">Run Sunday Decision →</a></span>
+    </div>`;
+    return;
+  }
+  wrap.innerHTML = `
+    <div class="eyebrow mb-2">This week's priorities — tap a day to schedule</div>
+    <div class="row mb-4" style="flex-wrap: wrap; gap: 8px;">
+      ${priorities.map(r => `
+        <div class="priority-pill" data-priority="${escAttr(r[2])}">
+          <strong>${escHtml(r[1])}:</strong> ${escHtml(r[2])}
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+async function refresh() {
+  const end = addDays(weekStart, 7);
+  document.getElementById('cal-range').textContent = formatRange(weekStart, addDays(weekStart, 6));
+  document.getElementById('cal-content').innerHTML = `<div class="spinner" style="margin: 40px auto;"></div>`;
+  try {
+    const visibility = getVisibility();
+    const visible = allCalendars.filter(c => visibility[c.id] !== false);
+    const eventsByCal = await Promise.all(visible.map(c =>
+      fetchEvents(c.id, weekStart.toISOString(), end.toISOString()).then(events => ({ cal: c, events }))
+    ));
+    weekEvents = [];
+    eventsByCal.forEach(({ cal, events }) => {
+      events.forEach(e => weekEvents.push({ event: e, calendar: cal }));
+    });
+    renderWeek();
   } catch (err) {
-    console.warn(err);
+    document.getElementById('cal-content').innerHTML = `<div class="error">${err.message}</div>`;
   }
 }
 
-async function listCalendars() {
-  return withFreshToken(async (token) => {
-    const res = await fetch(`${API}/users/me/calendarList`, {
-      headers: { Authorization: `Bearer ${token}` }
+function renderWeek() {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const cards = [];
+  for (let i = 0; i < 7; i++) {
+    const day = addDays(weekStart, i);
+    const dayEvents = weekEvents
+      .filter(({ event }) => isOnDay(event, day))
+      .sort((a, b) => eventStart(a.event) - eventStart(b.event));
+    const isToday = day.getTime() === today.getTime();
+    const isPast = day < today;
+
+    cards.push(`
+      <div class="day-card ${isToday ? 'today' : ''} ${isPast ? 'past' : ''}" data-iso="${isoDate(day)}">
+        <div class="day-card-header" data-add-day="${isoDate(day)}">
+          <div>
+            <div class="day-name">${DAY_NAMES[day.getDay()]}</div>
+            <div class="day-date">${day.getDate()} ${day.toLocaleDateString(undefined, { month: 'short' })}</div>
+          </div>
+          <button class="day-add-btn" aria-label="Add event">+</button>
+        </div>
+        ${dayEvents.length === 0 ? `
+          <div class="day-empty">Nothing scheduled</div>
+        ` : `
+          <div class="day-events">
+            ${dayEvents.map(({ event, calendar }) => renderEventChip(event, calendar)).join('')}
+          </div>
+        `}
+      </div>
+    `);
+  }
+  document.getElementById('cal-content').innerHTML = cards.join('');
+
+  // Day header → add event
+  document.querySelectorAll('.day-card-header[data-add-day]').forEach(el => {
+    el.addEventListener('click', () => addEventOnDay(el.dataset.addDay));
+  });
+  // Event chip → edit
+  document.querySelectorAll('.event-chip[data-event-id]').forEach(el => {
+    el.addEventListener('click', () => editEvent(el.dataset.calId, el.dataset.eventId));
+  });
+
+  // Make priority pills draggable to days (touch + mouse)
+  setupDragDrop();
+}
+
+function renderEventChip(event, calendar) {
+  const start = eventStart(event);
+  const end = eventEnd(event);
+  const allDay = !event.start.dateTime;
+  const time = allDay
+    ? 'All day'
+    : `${formatTime(start)} – ${formatTime(end)}`;
+  const color = calendar.backgroundColor || '#5b6e5a';
+  return `
+    <div class="event-chip" data-event-id="${escAttr(event.id)}" data-cal-id="${escAttr(calendar.id)}" style="--chip-color: ${escAttr(color)}">
+      <div class="event-time">${time}</div>
+      <div class="event-title">${escHtml(event.summary || '(no title)')}</div>
+    </div>
+  `;
+}
+
+async function addEventOnDay(isoDay) {
+  const visibleCalIds = allCalendars.filter(c => getVisibility()[c.id] !== false).map(c => c.id);
+  const writable = allCalendars.filter(c => visibleCalIds.includes(c.id));
+  const start = new Date(`${isoDay}T09:00:00`);
+  const end = new Date(`${isoDay}T10:00:00`);
+  const result = await eventModal({
+    defaultStart: start,
+    defaultEnd: end,
+    defaultCalendarId: getCalendarId() || writable[0]?.id,
+    calendars: writable
+  });
+  if (!result) return;
+  try {
+    await createEvent(result.calendarId, result.title, result.start, result.end);
+    await refresh();
+  } catch (err) {
+    await alertDialog({ title: 'Could not create event', message: err.message });
+  }
+}
+
+async function editEvent(calId, eventId) {
+  const entry = weekEvents.find(({ event, calendar }) => event.id === eventId && calendar.id === calId);
+  if (!entry) return;
+  const result = await eventModal({
+    event: {
+      title: entry.event.summary || '',
+      start: eventStart(entry.event),
+      end: eventEnd(entry.event),
+      calendarId: calId
+    },
+    calendars: allCalendars
+  });
+  if (!result) return;
+  try {
+    if (result.delete) {
+      const ok = await confirmDialog({ title: 'Delete this event?', confirmText: 'Delete', danger: true });
+      if (!ok) return;
+      await deleteEvent(calId, eventId);
+    } else {
+      // If calendar changed: delete and recreate (Google API doesn't support move)
+      if (result.calendarId !== calId) {
+        await createEvent(result.calendarId, result.title, result.start, result.end);
+        await deleteEvent(calId, eventId);
+      } else {
+        await updateEvent(calId, eventId, {
+          summary: result.title,
+          start: { dateTime: result.start.toISOString() },
+          end: { dateTime: result.end.toISOString() }
+        });
+      }
+    }
+    await refresh();
+  } catch (err) {
+    await alertDialog({ title: 'Failed', message: err.message });
+  }
+}
+
+function setupDragDrop() {
+  const pills = document.querySelectorAll('.priority-pill');
+  const dayCards = document.querySelectorAll('.day-card');
+  pills.forEach(pill => {
+    pill.setAttribute('draggable', 'true');
+    pill.addEventListener('dragstart', (e) => {
+      e.dataTransfer.setData('text/priority', pill.dataset.priority);
+      e.dataTransfer.effectAllowed = 'copy';
+      pill.classList.add('dragging');
     });
-    const data = await res.json();
-    return (data.items || []).filter(c => !c.hidden);
+    pill.addEventListener('dragend', () => pill.classList.remove('dragging'));
+  });
+  dayCards.forEach(card => {
+    card.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+      card.classList.add('drop-target');
+    });
+    card.addEventListener('dragleave', () => card.classList.remove('drop-target'));
+    card.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      card.classList.remove('drop-target');
+      const text = e.dataTransfer.getData('text/priority');
+      if (!text) return;
+      const day = card.dataset.iso;
+      const start = new Date(`${day}T09:00:00`);
+      const end = new Date(start.getTime() + 90 * 60 * 1000);
+      try {
+        await createEvent(getCalendarId(), text, start, end);
+        await refresh();
+      } catch (err) {
+        await alertDialog({ title: 'Could not schedule', message: err.message });
+      }
+    });
   });
 }
 
@@ -264,7 +309,6 @@ async function fetchEvents(calId, timeMin, timeMax) {
     return data.items || [];
   });
 }
-
 async function createEvent(calId, title, start, end) {
   return withFreshToken(async (token) => {
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -281,10 +325,9 @@ async function createEvent(calId, title, start, end) {
     return res.json();
   });
 }
-
-async function updateEvent(calId, evId, patch) {
+async function updateEvent(calId, eventId, patch) {
   return withFreshToken(async (token) => {
-    const res = await fetch(`${API}/calendars/${encodeURIComponent(calId)}/events/${evId}`, {
+    const res = await fetch(`${API}/calendars/${encodeURIComponent(calId)}/events/${eventId}`, {
       method: 'PATCH',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(patch)
@@ -293,10 +336,9 @@ async function updateEvent(calId, evId, patch) {
     return res.json();
   });
 }
-
-async function deleteEvent(calId, evId) {
+async function deleteEvent(calId, eventId) {
   return withFreshToken(async (token) => {
-    const res = await fetch(`${API}/calendars/${encodeURIComponent(calId)}/events/${evId}`, {
+    const res = await fetch(`${API}/calendars/${encodeURIComponent(calId)}/events/${eventId}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` }
     });
@@ -304,9 +346,40 @@ async function deleteEvent(calId, evId) {
   });
 }
 
+function startOfWeek(d) {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  const day = x.getDay();
+  const diff = (day + 6) % 7; // monday-start
+  x.setDate(x.getDate() - diff);
+  return x;
+}
+function addDays(d, n) {
+  const x = new Date(d);
+  x.setDate(x.getDate() + n);
+  return x;
+}
+function isoDate(d) { return d.toISOString().slice(0, 10); }
+function eventStart(e) { return new Date(e.start.dateTime || e.start.date); }
+function eventEnd(e) { return new Date(e.end?.dateTime || e.end?.date); }
+function isOnDay(event, day) {
+  const start = eventStart(event);
+  const end = eventEnd(event);
+  const dayEnd = addDays(day, 1);
+  return start < dayEnd && end > day;
+}
+function formatTime(d) {
+  return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+}
+function formatRange(start, end) {
+  const sameMonth = start.getMonth() === end.getMonth();
+  const startStr = start.toLocaleDateString(undefined, { day: 'numeric', month: sameMonth ? undefined : 'short' });
+  const endStr = end.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: end.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined });
+  return `${startStr} – ${endStr}`;
+}
 function escHtml(s) {
-  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 function escAttr(s) {
-  return String(s).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  return String(s || '').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }

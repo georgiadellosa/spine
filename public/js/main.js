@@ -39,7 +39,7 @@ async function bootstrap() {
     }
   }
 
-  navigate('morning');
+  navigate('home');
 }
 
 bootstrap();

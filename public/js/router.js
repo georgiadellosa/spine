@@ -4,6 +4,7 @@ import { attachCaptureFab, showFab } from './capture.js';
 const VIEWS = {
   login: () => import('./views/login.js'),
   setup: () => import('./views/setup.js'),
+  home: () => import('./views/home.js'),
   morning: () => import('./views/morning.js'),
   evening: () => import('./views/evening.js'),
   sunday: () => import('./views/sunday.js'),
@@ -22,14 +23,14 @@ const VIEWS = {
 };
 
 const NAV = [
-  { route: 'morning', label: 'Today', icon: 'sun' },
-  { route: 'evening', label: 'Evening', icon: 'moon' },
-  { route: 'money', label: 'Money', icon: 'coin' },
+  { route: 'home', label: 'Home', icon: 'sun' },
+  { route: 'morning', label: 'Today', icon: 'check' },
+  { route: 'calendar', label: 'Week', icon: 'calendar' },
   { route: 'wins', label: 'Wins', icon: 'sparkle' },
   { route: 'settings', label: 'More', icon: 'more' }
 ];
 const NAV_ROUTES = NAV.map(n => n.route);
-const FAB_ROUTES = [...NAV_ROUTES, 'evening', 'patterns', 'inbox', 'parking', 'data', 'quarterly', 'friday', 'brain-dumps'];
+const FAB_ROUTES = [...NAV_ROUTES, 'evening', 'patterns', 'inbox', 'parking', 'data', 'quarterly', 'friday', 'brain-dumps', 'money', 'sunday'];
 
 export async function navigate(name, params = {}) {
   const hash = `#/${name}`;
@@ -70,7 +71,7 @@ export function initRouter() {
   attachCaptureFab();
 
   window.addEventListener('hashchange', () => {
-    const route = location.hash.replace('#/', '') || 'morning';
+    const route = location.hash.replace('#/', '') || 'home';
     navigate(route);
   });
   nav.addEventListener('click', (e) => {
