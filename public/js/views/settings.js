@@ -21,10 +21,19 @@ export async function render(view) {
     </div>
 
     <div class="card">
+      <div class="eyebrow mb-3">Money</div>
+      ${linkRow('money', 'coin', 'Goals & direction', 'The why behind the money')}
+      <p class="faint" style="margin: 12px 0 0; line-height: 1.5;">
+        Day-to-day tracking — transactions, categories, bills, accounts — lives in the separate Budget app.
+      </p>
+    </div>
+
+    <div class="card">
       <div class="eyebrow mb-3">Your data</div>
       ${linkRow('inbox', 'paste', 'Inbox & Pending', 'Captures, delayed items, awaiting send')}
       ${linkRow('parking', 'leaf', 'Parking Lot', 'Dormant projects')}
       ${linkRow('brain-dumps', 'paste', 'Brain dump history', 'Past dumps, chronological')}
+      ${linkRow('calendar', 'calendar', 'Calendar', 'Two-way Google Calendar')}
       ${linkRow('data', 'layers', 'All data — browse & edit', 'Add, edit, delete any row in any tab')}
     </div>
 

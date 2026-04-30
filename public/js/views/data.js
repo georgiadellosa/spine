@@ -160,7 +160,7 @@ function getInputForField(header, value, idx) {
   }
   if (lower === 'domain') {
     return `<select id="f-${idx}">
-      ${['', 'PhD', 'LLW', 'Family', 'Personal', 'Apps', 'Other'].map(d => `<option value="${d}" ${value === d ? 'selected' : ''}>${d || '— select —'}</option>`).join('')}
+      ${['', 'PhD', 'LLW', 'Family', 'Finance', 'Personal', 'Apps', 'Other'].map(d => `<option value="${d}" ${value === d ? 'selected' : ''}>${d || '— select —'}</option>`).join('')}
     </select>`;
   }
   if (lower === 'status' && header === 'Status') {

@@ -161,7 +161,7 @@ function openEditModal(row, rowIndex, view) {
       <div class="field">
         <label>Domain</label>
         <select id="edit-domain">
-          ${['PhD', 'LLW', 'Family', 'Other'].map(d => `<option value="${d}" ${row[4] === d ? 'selected' : ''}>${d}</option>`).join('')}
+          ${['PhD', 'LLW', 'Family', 'Finance', 'Other'].map(d => `<option value="${d}" ${row[4] === d ? 'selected' : ''}>${d}</option>`).join('')}
         </select>
       </div>
       <button class="btn" id="save">Save</button>

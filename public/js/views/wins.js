@@ -1,8 +1,20 @@
 import { getRows, updateRow, deleteRow, appendRow } from '../google-sheets.js';
 import { getSheetId } from '../store.js';
+import { confirmDialog } from '../dialog.js';
 import { icon } from '../icons.js';
 
 let wins = [];
+
+const DOMAIN_COLORS = {
+  'PhD': 'var(--sage)',
+  'LLW': 'var(--sage-deep)',
+  'Family': 'var(--terracotta)',
+  'Money': 'var(--gold)',
+  'Ritual': 'var(--sage)',
+  'Personal': 'var(--gold)',
+  'Apps': 'var(--ink-soft)',
+  'Roadmap': 'var(--sage-deep)'
+};
 
 export async function render(view) {
   view.innerHTML = `
@@ -10,7 +22,7 @@ export async function render(view) {
       <h1>Wins</h1>
       <button class="btn btn-ghost" id="add-win" style="width: auto; padding: 0 16px; min-height: 40px;">+ Add</button>
     </div>
-    <p class="subtitle">Small things count. Especially the small things.</p>
+    <p class="subtitle">Every domain. Small things count.</p>
     <div id="content"><div class="spinner" style="margin: 40px auto;"></div></div>
   `;
   document.getElementById('add-win').addEventListener('click', () => openModal(null, view));
@@ -43,6 +55,15 @@ async function load(view) {
     });
     const checkedIn = days14.filter(day => checkins.some(c => c[0] === day)).length;
 
+    // Domain breakdown
+    const byDomain = {};
+    thisMonth.forEach(({ row }) => {
+      const d = row[2] || 'Other';
+      byDomain[d] = (byDomain[d] || 0) + 1;
+    });
+    const domainOrder = Object.entries(byDomain).sort((a, b) => b[1] - a[1]);
+    const totalThisMonth = thisMonth.length;
+
     document.getElementById('content').innerHTML = `
       <div class="card sage" style="text-align: center; padding: 32px 20px;">
         <div class="number" style="font-size: 56px; color: var(--sage); line-height: 1; font-weight: 600;">${thisMonth.length}</div>
@@ -52,6 +73,31 @@ async function load(view) {
           <span class="chip gold">${wins.length} all time</span>
         </div>
       </div>
+
+      ${domainOrder.length > 0 ? `
+        <div class="card">
+          <div class="eyebrow mb-3">By domain — this month</div>
+          <div class="stack-3">
+            ${domainOrder.map(([d, count]) => {
+              const pct = (count / totalThisMonth) * 100;
+              return `
+                <div>
+                  <div class="row between" style="align-items: baseline; margin-bottom: 4px;">
+                    <div class="row" style="gap: 8px; align-items: center;">
+                      <span class="cat-swatch" style="background: ${DOMAIN_COLORS[d] || 'var(--ink-faint)'}; width: 10px; height: 10px;"></span>
+                      <span style="font-size: 14px; color: var(--ink);">${escHtml(d)}</span>
+                    </div>
+                    <span style="font-size: 13px; font-weight: 500; color: var(--ink-soft);">${count}</span>
+                  </div>
+                  <div class="progress" style="height: 6px;">
+                    <div class="bar" style="width: ${pct}%; background: ${DOMAIN_COLORS[d] || 'var(--ink-faint)'};"></div>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      ` : ''}
 
       <div class="card">
         <div class="row between">
@@ -75,14 +121,17 @@ async function load(view) {
       ${wins.length === 0 ? `
         <div class="card center" style="padding: 32px 20px;">
           <div class="icon-large" style="width: 48px; height: 48px;">${icon('sparkle', 48)}</div>
-          <p style="margin-top: 16px;">No wins yet. Tap + above or log one in tonight's evening close.</p>
+          <p style="margin-top: 16px;">No wins yet. They'll start showing up automatically as you use the app — close a week, hit a goal, log one tonight in evening close.</p>
         </div>
       ` : `
         ${wins.slice(-50).reverse().map(({ row, rowIndex }) => `
           <div class="list-row" data-idx="${rowIndex}">
+            <span class="cat-swatch" style="background: ${DOMAIN_COLORS[row[2]] || 'var(--ink-faint)'}; width: 4px; height: 36px; border-radius: 2px; flex-shrink: 0;"></span>
             <div class="row-content">
               <div class="row-text">${escHtml(row[1] || '')}</div>
-              <div class="row-meta">${formatDate(row[0])}${row[2] ? ' · ' + escHtml(row[2]) : ''}</div>
+              <div class="row-meta">
+                ${formatDate(row[0])}${row[2] ? ` <span class="chip" style="font-size: 10px; padding: 1px 7px; margin-left: 4px;">${escHtml(row[2])}</span>` : ''}
+              </div>
             </div>
             <div class="row-actions">
               <button class="row-icon-btn" data-action="edit" data-idx="${rowIndex}">${icon('paste', 16)}</button>
@@ -111,7 +160,8 @@ async function handleAction(action, rowIndex, view) {
   if (action === 'edit') {
     openModal(entry, view);
   } else if (action === 'delete') {
-    if (!confirm('Delete this win?')) return;
+    const ok = await confirmDialog({ title: 'Delete this win?', confirmText: 'Delete', danger: true });
+    if (!ok) return;
     try {
       await deleteRow(getSheetId(), 'Wins', rowIndex);
       await load(view);
@@ -142,29 +192,32 @@ function openModal(existing, view) {
       </div>
       <div class="field">
         <label>Win</label>
-        <input type="text" id="m-win" value="${escAttr(row[1])}" placeholder="Anything counts" autofocus />
+        <input type="text" id="m-win" value="${escAttr(row[1])}" placeholder="Anything counts" />
       </div>
       <div class="field">
         <label>Domain</label>
         <select id="m-domain">
-          ${['', 'PhD', 'LLW', 'Family', 'Personal', 'Apps'].map(d => `<option value="${d}" ${row[2] === d ? 'selected' : ''}>${d || '— none —'}</option>`).join('')}
+          ${['', 'PhD', 'LLW', 'Family', 'Money', 'Ritual', 'Personal', 'Apps', 'Other'].map(d => `<option value="${d}" ${row[2] === d ? 'selected' : ''}>${d || '— none —'}</option>`).join('')}
         </select>
       </div>
-      <button class="btn" id="save">${isEdit ? 'Save' : 'Log it'}</button>
+      <div class="row" style="gap: 10px;">
+        <button class="btn btn-ghost" id="cancel" style="flex: 1;">Cancel</button>
+        <button class="btn" id="save" style="flex: 1;">${isEdit ? 'Save' : 'Log it'}</button>
+      </div>
     </div>
   `;
   document.body.appendChild(modal);
-  const close = () => modal.remove();
+  setTimeout(() => modal.querySelector('#m-win').focus(), 80);
+
+  function close() { modal.remove(); }
   modal.querySelector('#close').addEventListener('click', close);
+  modal.querySelector('#cancel').addEventListener('click', close);
   modal.querySelector('.modal-backdrop').addEventListener('click', close);
   modal.querySelector('#save').addEventListener('click', async () => {
     const date = document.getElementById('m-date').value || today;
     const win = document.getElementById('m-win').value.trim();
     const domain = document.getElementById('m-domain').value;
-    if (!win) {
-      alert('Add a win');
-      return;
-    }
+    if (!win) { document.getElementById('m-win').focus(); return; }
     const newRow = [date, win, domain, row[3] || new Date().toISOString()];
     try {
       if (isEdit) {
@@ -174,9 +227,7 @@ function openModal(existing, view) {
       }
       close();
       await load(view);
-    } catch (err) {
-      alert(`Failed: ${err.message}`);
-    }
+    } catch (err) { alert(`Failed: ${err.message}`); }
   });
 }
 

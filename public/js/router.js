@@ -17,18 +17,19 @@ const VIEWS = {
   inbox: () => import('./views/inbox.js'),
   parking: () => import('./views/parking.js'),
   data: () => import('./views/data.js'),
-  'brain-dumps': () => import('./views/brain-dumps.js')
+  'brain-dumps': () => import('./views/brain-dumps.js'),
+  money: () => import('./views/money.js')
 };
 
 const NAV = [
-  { route: 'morning', label: 'Morning', icon: 'sun' },
+  { route: 'morning', label: 'Today', icon: 'sun' },
   { route: 'evening', label: 'Evening', icon: 'moon' },
-  { route: 'calendar', label: 'Cal', icon: 'calendar' },
+  { route: 'money', label: 'Money', icon: 'coin' },
   { route: 'wins', label: 'Wins', icon: 'sparkle' },
   { route: 'settings', label: 'More', icon: 'more' }
 ];
 const NAV_ROUTES = NAV.map(n => n.route);
-const FAB_ROUTES = ['morning', 'evening', 'calendar', 'wins', 'settings', 'patterns', 'inbox', 'parking', 'data', 'quarterly', 'friday', 'brain-dumps'];
+const FAB_ROUTES = [...NAV_ROUTES, 'evening', 'patterns', 'inbox', 'parking', 'data', 'quarterly', 'friday', 'brain-dumps'];
 
 export async function navigate(name, params = {}) {
   const hash = `#/${name}`;

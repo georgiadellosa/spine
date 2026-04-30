@@ -17,6 +17,7 @@ export async function render(view) {
     <p class="subtitle">A few seconds. Then you're done.</p>
 
     <div id="ritual-banner"></div>
+    <div id="money-chip"></div>
 
     <div class="field">
       <label>Capacity right now</label>
@@ -68,6 +69,7 @@ export async function render(view) {
   `;
 
   renderRitualBanner();
+  renderMoneyChip();
   await suggestPriority();
   await suggestDayType();
 
@@ -116,6 +118,36 @@ export async function render(view) {
     state.sleep = e.target.value;
   });
   document.getElementById('submit').addEventListener('click', () => submit(view));
+}
+
+async function renderMoneyChip() {
+  try {
+    const { getRows } = await import('../google-sheets.js');
+    const { parseAmount } = await import('../money.js');
+    const sheetId = getSheetId();
+    const goalRows = await getRows(sheetId, 'Money Goals').catch(() => null);
+    if (!goalRows || goalRows.length < 2) return;
+    const goals = goalRows.slice(1).filter(r => !['Done', 'Killed'].includes(r[6]));
+    if (goals.length === 0) return;
+    // Pick the most-progressed goal with a target
+    const withTargets = goals.filter(r => parseAmount(r[2]) > 0);
+    if (withTargets.length === 0) return;
+    const top = withTargets
+      .map(r => ({ name: r[0], pct: Math.min(100, (parseAmount(r[3]) / parseAmount(r[2])) * 100) }))
+      .sort((a, b) => b.pct - a.pct)[0];
+    const wrap = document.getElementById('money-chip');
+    if (!wrap) return;
+    wrap.innerHTML = `
+      <a href="#/money" class="card" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; margin-bottom: 16px; text-decoration: none; color: inherit;">
+        <span style="font-size: 13px; color: var(--ink);">${icon('coin', 14)} ${escMoneyHtml(top.name)}</span>
+        <span style="font-size: 14px; font-weight: 600; color: ${top.pct >= 100 ? 'var(--sage)' : 'var(--gold)'};">${Math.round(top.pct)}%</span>
+      </a>
+    `;
+  } catch {}
+}
+
+function escMoneyHtml(s) {
+  return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
 function renderRitualBanner() {

@@ -2,6 +2,7 @@ import { appendRow, getRows, updateRow } from '../google-sheets.js';
 import { getDriveFolderId, getSheetId } from '../store.js';
 import { uploadAudioToDrive } from '../google-drive.js';
 import { whisperTranscribe, parseBrainDump } from '../api.js';
+import { logWin } from '../win.js';
 import { icon } from '../icons.js';
 
 let state = { items: [], decisions: [], rawText: '', source: 'Text', preExisting: [] };
@@ -344,6 +345,7 @@ function showPickThree(view) {
         appendRow(sheetId, 'Weekly Priorities', [ws, 'LLW', llw, 'Set', now, now, '']),
         appendRow(sheetId, 'Weekly Priorities', [ws, 'Family', family, 'Set', now, now, ''])
       ]);
+      await logWin(`Set 3 priorities for week of ${ws}`, 'Ritual');
       view.innerHTML = `
         <div class="center-screen">
           <div class="celebrate-check">${icon('check', 40)}</div>

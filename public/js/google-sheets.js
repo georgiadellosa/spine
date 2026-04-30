@@ -14,6 +14,12 @@ export const TABS = [
   { name: 'Parking Lot', headers: ['Parked Date', 'Project', 'Future Me Note', 'Status', 'Last Reviewed'] }
 ];
 
+// Spine keeps only Money Goals — for planning + motivation. Day-to-day
+// transactions/categories/bills/accounts live in the separate Budget app.
+export const BUDGET_TABS = [
+  { name: 'Money Goals', headers: ['Name', 'Type', 'Target Amount', 'Current Amount', 'Target Date', 'Why', 'Status', 'Created'] }
+];
+
 export const TAB_SHEET_IDS = TABS.reduce((acc, t, i) => { acc[t.name] = i; return acc; }, {});
 
 const QUARTERLY_SPINE_SEED = [
@@ -27,20 +33,48 @@ const QUARTERLY_SPINE_SEED = [
   ['2027 Q3', 'Personal', 'Income locked for October 2027 onwards', '2027-09-30', 'On Track', '', '']
 ];
 
+// Default categories live in the Budget app, not Spine.
+
+let sheetIdCache = {};
+
+async function fetchSheetMeta(spreadsheetId) {
+  return withFreshToken(async (token) => {
+    const res = await fetch(`${API}/${spreadsheetId}?fields=sheets.properties`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (!res.ok) throw new Error('Could not fetch sheet metadata');
+    return res.json();
+  });
+}
+
+export async function getTabSheetId(spreadsheetId, tabName) {
+  const cacheKey = `${spreadsheetId}::${tabName}`;
+  if (sheetIdCache[cacheKey] !== undefined) return sheetIdCache[cacheKey];
+  const data = await fetchSheetMeta(spreadsheetId);
+  for (const s of data.sheets || []) {
+    sheetIdCache[`${spreadsheetId}::${s.properties.title}`] = s.properties.sheetId;
+  }
+  if (sheetIdCache[cacheKey] === undefined && TAB_SHEET_IDS[tabName] !== undefined) {
+    return TAB_SHEET_IDS[tabName]; // fallback for known tabs
+  }
+  return sheetIdCache[cacheKey];
+}
+
 export async function createSpineSheet() {
   return withFreshToken(async (token) => {
+    const allTabs = [...TABS, ...BUDGET_TABS];
     const createRes = await fetch(API, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         properties: { title: 'Spine' },
-        sheets: TABS.map((tab, i) => ({ properties: { sheetId: i, title: tab.name } }))
+        sheets: allTabs.map((tab, i) => ({ properties: { sheetId: i, title: tab.name } }))
       })
     });
     if (!createRes.ok) throw new Error(`Sheet create: ${await createRes.text()}`);
     const sheet = await createRes.json();
     const spreadsheetId = sheet.spreadsheetId;
-    const data = TABS.map(tab => ({ range: `${tab.name}!A1`, values: [tab.headers] }));
+    const data = allTabs.map(tab => ({ range: `${tab.name}!A1`, values: [tab.headers] }));
     data.push({ range: 'Quarterly Spine!A2', values: QUARTERLY_SPINE_SEED });
     const updateRes = await fetch(`${API}/${spreadsheetId}/values:batchUpdate`, {
       method: 'POST',
@@ -49,6 +83,37 @@ export async function createSpineSheet() {
     });
     if (!updateRes.ok) throw new Error(`Sheet headers: ${await updateRes.text()}`);
     return spreadsheetId;
+  });
+}
+
+// Lazy migration: ensure budget tabs exist on existing spreadsheets
+export async function ensureBudgetTabs(spreadsheetId) {
+  return withFreshToken(async (token) => {
+    const meta = await fetchSheetMeta(spreadsheetId);
+    const existing = (meta.sheets || []).map(s => s.properties.title);
+    const missing = BUDGET_TABS.filter(t => !existing.includes(t.name));
+    if (missing.length === 0) return false;
+
+    const maxId = Math.max(0, ...(meta.sheets || []).map(s => s.properties.sheetId || 0));
+    const requests = missing.map((t, i) => ({
+      addSheet: { properties: { sheetId: maxId + 1 + i, title: t.name } }
+    }));
+    const batchRes = await fetch(`${API}/${spreadsheetId}:batchUpdate`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requests })
+    });
+    if (!batchRes.ok) throw new Error(`Add budget tabs: ${await batchRes.text()}`);
+
+    const updateData = missing.map(t => ({ range: `${t.name}!A1`, values: [t.headers] }));
+    await fetch(`${API}/${spreadsheetId}/values:batchUpdate`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ valueInputOption: 'USER_ENTERED', data: updateData })
+    });
+
+    sheetIdCache = {}; // bust cache
+    return true;
   });
 }
 
@@ -90,8 +155,7 @@ export async function updateRow(spreadsheetId, tabName, rowIndex, row) {
 }
 
 export async function deleteRow(spreadsheetId, tabName, rowIndex) {
-  // rowIndex is 1-based (header at row 1; first data row at row 2)
-  const sheetId = TAB_SHEET_IDS[tabName];
+  const sheetId = await getTabSheetId(spreadsheetId, tabName);
   if (sheetId === undefined) throw new Error(`Unknown tab: ${tabName}`);
   return withFreshToken(async (token) => {
     const url = `${API}/${spreadsheetId}:batchUpdate`;
@@ -101,12 +165,7 @@ export async function deleteRow(spreadsheetId, tabName, rowIndex) {
       body: JSON.stringify({
         requests: [{
           deleteDimension: {
-            range: {
-              sheetId,
-              dimension: 'ROWS',
-              startIndex: rowIndex - 1,
-              endIndex: rowIndex
-            }
+            range: { sheetId, dimension: 'ROWS', startIndex: rowIndex - 1, endIndex: rowIndex }
           }
         }]
       })

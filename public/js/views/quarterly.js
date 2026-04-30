@@ -1,6 +1,7 @@
 import { getRows, updateRow, appendRow, deleteRow } from '../google-sheets.js';
 import { getSheetId, getCalendarId } from '../store.js';
 import { withFreshToken } from '../auth.js';
+import { logWin } from '../win.js';
 import { icon } from '../icons.js';
 
 const CAL_API = 'https://www.googleapis.com/calendar/v3';
@@ -86,11 +87,16 @@ async function load(view) {
         const idx = parseInt(e.target.dataset.row);
         const entry = items.find(i => i.rowIndex === idx);
         if (!entry) return;
+        const previousStatus = entry.row[4];
+        const newStatus = e.target.value;
         const updated = [...entry.row];
         while (updated.length < 7) updated.push('');
-        updated[4] = e.target.value;
+        updated[4] = newStatus;
         try {
           await updateRow(getSheetId(), 'Quarterly Spine', idx, updated);
+          if (newStatus === 'Done' && previousStatus !== 'Done') {
+            await logWin(`Completed roadmap item: ${entry.row[2]}`, entry.row[1] || 'Roadmap');
+          }
           await load(view);
         } catch (err) {
           alert(`Failed: ${err.message}`);

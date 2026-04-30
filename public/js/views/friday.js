@@ -1,6 +1,7 @@
 import { getRows, appendRow } from '../google-sheets.js';
 import { getSheetId, getCalendarId } from '../store.js';
 import { withFreshToken } from '../auth.js';
+import { logWin } from '../win.js';
 import { icon } from '../icons.js';
 
 const CAL_API = 'https://www.googleapis.com/calendar/v3';
@@ -148,6 +149,7 @@ async function submit(view) {
     await appendRow(sheetId, 'Weekly Close', [
       ws, state.shipped, state.stuck, state.moves, state.mood || '', state.note, new Date().toISOString()
     ]);
+    await logWin(`Closed the week (ending ${ws})`, 'Ritual');
     view.innerHTML = `
       <div class="center-screen">
         <div class="celebrate-check">${icon('check', 40)}</div>
