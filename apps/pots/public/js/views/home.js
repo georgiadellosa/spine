@@ -50,18 +50,20 @@ export async function render(view) {
 
 async function renderHero() {
   const sheetId = getSheetId();
-  const [txnRows, debtRows, billsRows, accountsRows, goalRows] = await Promise.all([
+  const [txnRows, debtRows, billsRows, accountsRows, goalRows, incomeRows] = await Promise.all([
     getRows(sheetId, 'Transactions').catch(() => []),
     getRows(sheetId, 'Debts').catch(() => []),
     getRows(sheetId, 'Bills').catch(() => []),
     getRows(sheetId, 'Accounts').catch(() => []),
-    getRows(sheetId, 'Money Goals').catch(() => [])
+    getRows(sheetId, 'Money Goals').catch(() => []),
+    getRows(sheetId, 'Income').catch(() => [])
   ]);
   const txns = txnRows.slice(1);
   const debts = debtRows.slice(1).filter(r => r[7] !== 'Paid off' && r[7] !== 'Killed');
   const bills = billsRows.slice(1);
   const accounts = accountsRows.slice(1);
   const goals = goalRows.slice(1).filter(r => !['Done', 'Killed'].includes(r[6]));
+  const incomes = incomeRows.slice(1).filter(r => (r[4] || 'Yes') === 'Yes' && r[5]);
 
   const today = new Date();
   const thisMonth = txns.filter(r => isInMonth(r[0], today));
@@ -76,6 +78,8 @@ async function renderHero() {
 
   // Upcoming bill in next 7 days
   const upcomingBill = computeNextBill(bills, today);
+  // Next pay landing soonest
+  const nextPay = computeNextPay(incomes, today);
 
   const hero = document.getElementById('hero-strip');
 
@@ -117,6 +121,14 @@ async function renderHero() {
         </a>
       ` : ''}
 
+      ${nextPay ? `
+        <a href="#/settings" class="hero-card">
+          <div class="hero-label">Next pay</div>
+          <div class="hero-amount income">${formatCurrency(nextPay.amount, { showSign: false })}</div>
+          <div class="hero-sub"><strong>${escHtml(nextPay.source)}</strong> · ${nextPay.daysUntil === 0 ? 'today' : nextPay.daysUntil === 1 ? 'tomorrow' : `in ${nextPay.daysUntil} days`}</div>
+        </a>
+      ` : ''}
+
       ${upcomingBill ? `
         <a href="#/bills" class="hero-card hero-card--warning">
           <div class="hero-label">Next bill</div>
@@ -134,6 +146,20 @@ async function renderHero() {
       ` : ''}
     </div>
   `;
+}
+
+function computeNextPay(incomes, today) {
+  let next = null;
+  for (const r of incomes) {
+    if (!r[5]) continue;
+    const d = new Date(r[5]);
+    if (isNaN(d)) continue;
+    const daysUntil = Math.ceil((d - today) / (1000 * 60 * 60 * 24));
+    if (daysUntil >= 0 && (!next || daysUntil < next.daysUntil)) {
+      next = { source: r[0], amount: parseAmount(r[1]), daysUntil };
+    }
+  }
+  return next;
 }
 
 function computeNextBill(bills, today) {

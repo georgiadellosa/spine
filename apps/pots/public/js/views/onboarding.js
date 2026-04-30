@@ -267,9 +267,13 @@ function openIncomeModal(view) {
   const modal = makeModal('Add income source', `
     <div class="field"><label>Source</label><input type="text" id="i-source" placeholder="e.g. PhD scholarship, Day job, Centrelink" autofocus /></div>
     <div class="field"><label>Amount</label><input type="number" id="i-amount" inputmode="decimal" step="0.01" placeholder="0.00" /></div>
-    <div class="field"><label>Frequency</label>
-      <select id="i-freq">${['Weekly','Fortnightly','Monthly','Yearly','One-off'].map(f => `<option value="${f}">${f}</option>`).join('')}</select>
+    <div class="row" style="gap: 10px;">
+      <div class="field" style="flex: 1; min-width: 0;"><label>Frequency</label>
+        <select id="i-freq">${['Weekly','Fortnightly','Monthly','Yearly','One-off'].map(f => `<option value="${f}">${f}</option>`).join('')}</select>
+      </div>
+      <div class="field" style="flex: 1; min-width: 0;"><label>Next pay date</label><input type="date" id="i-next" /></div>
     </div>
+    <div class="field"><label>End date <span class="faint">(optional — e.g. when scholarship runs out)</span></label><input type="date" id="i-end" /></div>
   `);
   modal.querySelector('#save').addEventListener('click', () => {
     const source = modal.querySelector('#i-source').value.trim();
@@ -277,7 +281,9 @@ function openIncomeModal(view) {
     collected.income.push({
       source,
       amount: modal.querySelector('#i-amount').value,
-      frequency: modal.querySelector('#i-freq').value
+      frequency: modal.querySelector('#i-freq').value,
+      nextDate: modal.querySelector('#i-next').value,
+      endDate: modal.querySelector('#i-end').value
     });
     modal.remove();
     showStep(view);
@@ -399,7 +405,7 @@ async function saveAll(key) {
   try {
     if (key === 'income') {
       for (const i of collected.income) {
-        await appendRow(sheetId, 'Income', [i.source, i.amount, i.frequency, '', 'Yes', '', '']);
+        await appendRow(sheetId, 'Income', [i.source, i.amount, i.frequency, '', 'Yes', i.nextDate || '', i.endDate || '', '']);
       }
     } else if (key === 'bills') {
       for (const b of collected.bills) {
