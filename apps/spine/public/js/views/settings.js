@@ -24,8 +24,28 @@ export async function render(view) {
       <div class="eyebrow mb-3">Money</div>
       ${linkRow('money', 'coin', 'Goals & direction', 'The why behind the money')}
       <p class="faint" style="margin: 12px 0 0; line-height: 1.5;">
-        Day-to-day tracking — transactions, categories, bills, accounts — lives in the separate Budget app.
+        Day-to-day tracking — transactions, categories, bills, accounts — lives in Pots.
       </p>
+    </div>
+
+    <div class="card">
+      <div class="eyebrow mb-3">Other webbybrain apps</div>
+      <a href="https://hands.thewebbybrain.com" target="_blank" style="display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--sand); text-decoration: none; color: inherit;">
+        <div><div style="font-weight: 500; color: var(--ink);">Pots <span class="faint">· Hands</span></div><div class="faint" style="margin-top: 2px;">Money — sinking funds, runway, debts</div></div>
+        <span style="color: var(--ink-faint);">↗</span>
+      </a>
+      <a href="https://head.thewebbybrain.com" target="_blank" style="display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--sand); text-decoration: none; color: inherit;">
+        <div><div style="font-weight: 500; color: var(--ink);">Untangle <span class="faint">· Head</span></div><div class="faint" style="margin-top: 2px;">Planning, brain dump, capacity</div></div>
+        <span style="color: var(--ink-faint);">↗</span>
+      </a>
+      <a href="https://hearth.thewebbybrain.com" target="_blank" style="display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--sand); text-decoration: none; color: inherit;">
+        <div><div style="font-weight: 500; color: var(--ink);">TwoNests <span class="faint">· Hearth</span></div><div class="faint" style="margin-top: 2px;">Coparenting, kid logistics</div></div>
+        <span style="color: var(--ink-faint);">↗</span>
+      </a>
+      <a href="https://thewebbybrain.com" target="_blank" style="display: flex; align-items: center; justify-content: space-between; padding: 12px 0; text-decoration: none; color: inherit;">
+        <div><div style="font-weight: 500; color: var(--sage);">↻ All webbybrain apps</div><div class="faint" style="margin-top: 2px;">Suite landing</div></div>
+        <span style="color: var(--ink-faint);">↗</span>
+      </a>
     </div>
 
     <div class="card">
