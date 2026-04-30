@@ -1,4 +1,5 @@
 import { icon } from './icons.js';
+import { attachQuickAddFab, showQuickAddFab } from './quickadd.js';
 
 const VIEWS = {
   login: () => import('./views/login.js'),
@@ -47,6 +48,8 @@ export async function navigate(name, params = {}) {
       a.classList.toggle('active', a.dataset.route === name);
     });
   }
+  // FAB shows on all main app screens (everything except login/setup/onboarding)
+  showQuickAddFab(!['login', 'setup', 'onboarding'].includes(name));
 }
 
 export function initRouter() {
@@ -57,6 +60,8 @@ export function initRouter() {
       <span>${n.label}</span>
     </a>
   `).join('');
+
+  attachQuickAddFab();
 
   window.addEventListener('hashchange', () => {
     const route = location.hash.replace('#/', '') || 'money';

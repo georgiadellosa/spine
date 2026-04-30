@@ -39,19 +39,8 @@ async function load(view) {
 
   const today = new Date();
   const enriched = bills.map(b => {
-    const dueDay = parseInt(b.row[3]);
-    const freq = (b.row[2] || 'Monthly').toLowerCase();
-    let dueDate = null;
-    let daysUntil = null;
-    if (!isNaN(dueDay)) {
-      if (freq === 'monthly') {
-        dueDate = new Date(today.getFullYear(), today.getMonth(), dueDay);
-        if (dueDate < new Date(today.getFullYear(), today.getMonth(), today.getDate())) {
-          dueDate = new Date(today.getFullYear(), today.getMonth() + 1, dueDay);
-        }
-        daysUntil = Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24));
-      }
-    }
+    const dueDate = parseNextDue(b.row[3], b.row[2], today);
+    const daysUntil = dueDate ? Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24)) : null;
     return { ...b, dueDate, daysUntil };
   });
 
@@ -158,8 +147,8 @@ function openModal(existing, view) {
           </select>
         </div>
         <div class="field" style="flex: 1;">
-          <label>Due day</label>
-          <input type="number" id="b-day" min="1" max="31" value="${row[3] || ''}" placeholder="e.g. 15" />
+          <label>Next due date</label>
+          <input type="date" id="b-day" value="${escAttr(toDateInput(row[3]))}" />
         </div>
       </div>
       <div class="field">
@@ -216,6 +205,46 @@ function openModal(existing, view) {
       alert(`Failed: ${err.message}`);
     }
   });
+}
+
+// Parse the bill's "Next Due" column. Accepts:
+//   - YYYY-MM-DD or any parseable date string  → returns Date
+//   - day-of-month number (1-31) for backward compat → computes next occurrence using freq
+//   - empty/invalid → null
+function parseNextDue(raw, frequency, today) {
+  if (!raw) return null;
+  const s = String(raw).trim();
+  // ISO date or any date-parseable string?
+  if (/^\d{4}-\d{2}-\d{2}/.test(s) || isNaN(parseInt(s)) || s.length > 2) {
+    const d = new Date(s);
+    if (!isNaN(d)) return d;
+  }
+  // Fallback: numeric day-of-month from old schema
+  const day = parseInt(s);
+  if (isNaN(day) || day < 1 || day > 31) return null;
+  const freq = (frequency || 'Monthly').toLowerCase();
+  if (freq !== 'monthly') return null;
+  const startToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  let d = new Date(today.getFullYear(), today.getMonth(), day);
+  if (d < startToday) d = new Date(today.getFullYear(), today.getMonth() + 1, day);
+  return d;
+}
+
+function toDateInput(raw) {
+  if (!raw) return '';
+  // Already YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(String(raw))) return raw;
+  // Day-of-month number — convert to next occurrence
+  const day = parseInt(raw);
+  if (!isNaN(day) && day >= 1 && day <= 31) {
+    const today = new Date();
+    let d = new Date(today.getFullYear(), today.getMonth(), day);
+    if (d < new Date(today.getFullYear(), today.getMonth(), today.getDate())) {
+      d = new Date(today.getFullYear(), today.getMonth() + 1, day);
+    }
+    return d.toISOString().slice(0, 10);
+  }
+  return '';
 }
 
 function escHtml(s) {

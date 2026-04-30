@@ -5,7 +5,7 @@ const API = 'https://sheets.googleapis.com/v4/spreadsheets';
 export const TABS = [
   { name: 'Transactions', headers: ['Date', 'Amount', 'Category', 'Description', 'Account', 'Type', 'Notes', 'Created'] },
   { name: 'Categories', headers: ['Name', 'Type', 'Monthly Target', 'Color', 'Notes'] },
-  { name: 'Bills', headers: ['Name', 'Amount', 'Frequency', 'Due Day', 'Category', 'Account', 'Last Paid', 'Notes'] },
+  { name: 'Bills', headers: ['Name', 'Amount', 'Frequency', 'Next Due', 'Category', 'Account', 'Last Paid', 'Notes'] },
   { name: 'Accounts', headers: ['Name', 'Type', 'Current Balance', 'Last Updated', 'Notes'] },
   { name: 'Debts', headers: ['Name', 'Type', 'Original Amount', 'Current Balance', 'Interest Rate', 'Min Payment', 'Target Payoff', 'Status', 'Why', 'Notes', 'Created'] },
   { name: 'Income', headers: ['Source', 'Amount', 'Frequency', 'Type', 'Active', 'Next Date', 'End Date', 'Notes'] },
@@ -41,7 +41,17 @@ async function fetchSheetMeta(spreadsheetId) {
     const res = await fetch(`${API}/${spreadsheetId}?fields=sheets.properties`, {
       headers: { Authorization: `Bearer ${token}` }
     });
-    if (!res.ok) throw new Error('Could not fetch sheet metadata');
+    if (!res.ok) {
+      let msg = `Could not fetch sheet metadata (HTTP ${res.status})`;
+      try {
+        const body = await res.text();
+        msg += `: ${body.slice(0, 300)}`;
+      } catch {}
+      if (res.status === 404) msg = `Sheet not found. The Pots sheet ID in your browser doesn't exist anymore (deleted, or wrong account?). Try More → "Connect different Pots" to reconnect.`;
+      if (res.status === 403) msg = `No permission for this sheet. Make sure you're signed in with the right Google account.`;
+      if (res.status === 401) msg = `Auth expired. Refresh the page and sign in again.`;
+      throw new Error(msg);
+    }
     return res.json();
   });
 }
