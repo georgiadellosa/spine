@@ -22,7 +22,7 @@ export async function render(view) {
   document.getElementById('signin').addEventListener('click', async () => {
     try {
       await signIn();
-      if (getSheetId()) navigate('morning');
+      if (getSheetId()) navigate('home');
       else navigate('setup');
     } catch (err) {
       console.error('Sign-in failed', err);

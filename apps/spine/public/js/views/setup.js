@@ -7,6 +7,70 @@ import { navigate } from '../router.js';
 import { icon } from '../icons.js';
 
 export async function render(view) {
+  // Show a checking state while we look for existing sheets
+  view.innerHTML = `
+    <div class="center-screen">
+      <div class="icon-large">${icon('layers', 64)}</div>
+      <h1>Get started</h1>
+      <p style="max-width: 360px;">Looking for an existing Spine in your Google Drive…</p>
+      <div class="spinner"></div>
+    </div>
+  `;
+
+  let existingSheets = [];
+  try {
+    existingSheets = await findExistingSpineSheets();
+  } catch (err) {
+    console.warn('Could not search for existing sheets', err);
+  }
+
+  // If we found exactly ONE existing Spine sheet, default to auto-connecting to it.
+  if (existingSheets.length === 1) {
+    const found = existingSheets[0];
+    view.innerHTML = `
+      <div class="center-screen">
+        <div class="icon-large">${icon('layers', 64)}</div>
+        <h1>Found your Spine</h1>
+        <p style="max-width: 360px;">There's already a "Spine" spreadsheet in your Drive (last modified ${formatDate(found.modifiedTime)}). Connect this browser to it?</p>
+        <div style="max-width: 360px; width: 100%; display: flex; flex-direction: column; gap: 12px;">
+          <button class="btn" id="auto-connect">${icon('check', 18)} Connect to existing Spine</button>
+          <button class="btn btn-ghost" id="new-setup">${icon('sparkle', 18)} No, set up a new one</button>
+        </div>
+      </div>
+    `;
+    document.getElementById('auto-connect').addEventListener('click', () => autoConnect(view, found));
+    document.getElementById('new-setup').addEventListener('click', () => runNewSetup(view));
+    return;
+  }
+
+  // Multiple existing? Let user pick which to connect to.
+  if (existingSheets.length > 1) {
+    view.innerHTML = `
+      <div class="center-screen">
+        <div class="icon-large">${icon('layers', 64)}</div>
+        <h1>${existingSheets.length} Spine sheets found</h1>
+        <p style="max-width: 360px;">Pick the one you want to use, or set up a new one.</p>
+        <div style="max-width: 480px; width: 100%; display: flex; flex-direction: column; gap: 8px;">
+          ${existingSheets.map((s, i) => `
+            <button class="btn btn-ghost" data-pick="${i}" style="text-align: left; justify-content: flex-start;">
+              <div>
+                <div style="font-weight: 500;">${escHtml(s.name)}</div>
+                <div class="faint" style="font-size: 12px; margin-top: 2px;">last modified ${formatDate(s.modifiedTime)}</div>
+              </div>
+            </button>
+          `).join('')}
+          <button class="btn" id="new-setup" style="margin-top: 12px;">${icon('sparkle', 18)} Set up a brand new Spine</button>
+        </div>
+      </div>
+    `;
+    view.querySelectorAll('button[data-pick]').forEach(btn => {
+      btn.addEventListener('click', () => autoConnect(view, existingSheets[parseInt(btn.dataset.pick)]));
+    });
+    document.getElementById('new-setup').addEventListener('click', () => runNewSetup(view));
+    return;
+  }
+
+  // No existing sheet — show the original choice (new vs paste-in connect)
   view.innerHTML = `
     <div class="center-screen">
       <div class="icon-large">${icon('layers', 64)}</div>
@@ -25,6 +89,49 @@ export async function render(view) {
   `;
   document.getElementById('new-setup').addEventListener('click', () => runNewSetup(view));
   document.getElementById('connect-setup').addEventListener('click', () => runConnectFlow(view));
+}
+
+async function findExistingSpineSheets() {
+  return withFreshToken(async (token) => {
+    const q = encodeURIComponent("name='Spine' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false");
+    const url = `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,modifiedTime)&orderBy=modifiedTime desc`;
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.files || [];
+  });
+}
+
+async function autoConnect(view, sheet) {
+  view.innerHTML = `
+    <div class="center-screen">
+      <div class="spinner"></div>
+      <p class="muted">Connecting to ${escHtml(sheet.name)}…</p>
+    </div>
+  `;
+  try {
+    await validateSpineSheet(sheet.id);
+    setSheetId(sheet.id);
+    // Try to also link the matching Drive folder + Spine calendar
+    try {
+      const folders = await findSpineFolder();
+      if (folders.length === 1) setDriveFolderId(folders[0].id);
+    } catch {}
+    try {
+      const cals = await listCalendars();
+      const spineCal = cals.find(c => c.summary === 'Spine');
+      if (spineCal) setCalendarId(spineCal.id);
+    } catch {}
+    setSetupComplete();
+    showSuccess(view, 'Connected.', 'This browser is now linked to your existing Spine.');
+  } catch (err) {
+    showError(view, err.message);
+  }
+}
+
+function formatDate(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 async function runNewSetup(view) {
@@ -173,11 +280,11 @@ function showSuccess(view, title, body) {
       <h1>${escHtml(title)}</h1>
       <p style="max-width: 360px;">${escHtml(body)}</p>
       <button class="btn" id="continue" style="max-width: 320px;">
-        Open morning check-in ${icon('arrow', 18)}
+        Open Spine ${icon('arrow', 18)}
       </button>
     </div>
   `;
-  document.getElementById('continue').addEventListener('click', () => navigate('morning'));
+  document.getElementById('continue').addEventListener('click', () => navigate('home'));
 }
 
 function showError(view, message) {
