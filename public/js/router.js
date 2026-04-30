@@ -1,4 +1,5 @@
 import { icon } from './icons.js';
+import { attachCaptureFab, showFab } from './capture.js';
 
 const VIEWS = {
   login: () => import('./views/login.js'),
@@ -12,7 +13,10 @@ const VIEWS = {
   patterns: () => import('./views/patterns.js'),
   settings: () => import('./views/settings.js'),
   quarterly: () => import('./views/quarterly.js'),
-  recovery: () => import('./views/recovery.js')
+  recovery: () => import('./views/recovery.js'),
+  inbox: () => import('./views/inbox.js'),
+  parking: () => import('./views/parking.js'),
+  data: () => import('./views/data.js')
 };
 
 const NAV = [
@@ -23,6 +27,7 @@ const NAV = [
   { route: 'settings', label: 'More', icon: 'more' }
 ];
 const NAV_ROUTES = NAV.map(n => n.route);
+const FAB_ROUTES = ['morning', 'evening', 'calendar', 'wins', 'settings', 'patterns', 'inbox', 'parking', 'data', 'quarterly', 'friday'];
 
 export async function navigate(name, params = {}) {
   const hash = `#/${name}`;
@@ -42,18 +47,16 @@ export async function navigate(name, params = {}) {
     console.error('Route render failed', err);
     view.innerHTML = `<div class="error">Couldn't load this screen. ${err.message || ''}</div>`;
   }
-  if (NAV_ROUTES.includes(name)) {
-    nav.hidden = false;
+  nav.hidden = !NAV_ROUTES.includes(name);
+  if (!nav.hidden) {
     nav.querySelectorAll('a').forEach(a => {
       a.classList.toggle('active', a.dataset.route === name);
     });
-  } else {
-    nav.hidden = true;
   }
+  showFab(FAB_ROUTES.includes(name));
 }
 
 export function initRouter() {
-  // Render nav with icons
   const nav = document.getElementById('nav');
   nav.innerHTML = NAV.map(n => `
     <a href="#/${n.route}" data-route="${n.route}">
@@ -61,6 +64,8 @@ export function initRouter() {
       <span>${n.label}</span>
     </a>
   `).join('');
+
+  attachCaptureFab();
 
   window.addEventListener('hashchange', () => {
     const route = location.hash.replace('#/', '') || 'morning';

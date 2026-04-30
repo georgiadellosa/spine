@@ -12,28 +12,23 @@ export async function render(view) {
 
     <div class="card">
       <div class="eyebrow mb-3">Rituals</div>
-      <a href="#/sunday" class="link" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--sand);">
-        <span>${icon('refresh', 16)} Sunday Decision</span>
-        ${icon('arrow', 16)}
-      </a>
-      <a href="#/friday" class="link" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--sand);">
-        <span>${icon('check', 16)} Friday Close</span>
-        ${icon('arrow', 16)}
-      </a>
-      <a href="#/quarterly" class="link" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--sand);">
-        <span>${icon('layers', 16)} Quarterly Spine</span>
-        ${icon('arrow', 16)}
-      </a>
-      <a href="#/patterns" class="link" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0;">
-        <span>${icon('sparkle', 16)} Patterns</span>
-        ${icon('arrow', 16)}
-      </a>
+      ${linkRow('sunday', 'refresh', 'Sunday Decision', 'Brain dump → triage → pick three')}
+      ${linkRow('friday', 'check', 'Friday Close', 'Reflect on the week')}
+      ${linkRow('quarterly', 'layers', 'Quarterly Spine', '17-month roadmap')}
+      ${linkRow('patterns', 'sparkle', 'Patterns', 'What the data is showing')}
+    </div>
+
+    <div class="card">
+      <div class="eyebrow mb-3">Your data</div>
+      ${linkRow('inbox', 'paste', 'Inbox & Pending', 'Captures, delayed items, awaiting send')}
+      ${linkRow('parking', 'leaf', 'Parking Lot', 'Dormant projects')}
+      ${linkRow('data', 'layers', 'All data — browse & edit', 'Add, edit, delete any row in any tab')}
     </div>
 
     <div class="card">
       <div class="eyebrow mb-3">Paste from Claude</div>
       <p class="muted" style="font-size: 13px; margin-bottom: 12px;">
-        Paste a Claude conversation or any structured-ish text. The AI will parse it into items and add them to your brain dump for triage.
+        Paste a Claude conversation or any structured text. The AI parses it into items added to your brain dump for triage.
       </p>
       <textarea id="paste-text" placeholder="Paste a brain dump, plan, or list from Claude..."></textarea>
       <button class="btn btn-ghost mt-3" id="paste-btn">${icon('paste', 16)} Ingest into brain dump</button>
@@ -41,17 +36,16 @@ export async function render(view) {
     </div>
 
     <div class="card">
-      <div class="eyebrow mb-3">Your data</div>
-      <p class="muted" style="font-size: 13px; margin-bottom: 12px;">Everything lives in your Google account.</p>
+      <div class="eyebrow mb-3">Open in Google</div>
       <div class="stack-2">
-        <a href="https://docs.google.com/spreadsheets/d/${getSheetId()}" target="_blank" class="link" style="display: flex; align-items: center; gap: 8px;">
-          ${icon('open', 14)} Open Spine spreadsheet
+        <a href="https://docs.google.com/spreadsheets/d/${getSheetId()}" target="_blank" class="link" style="display: flex; align-items: center; gap: 8px; padding: 8px 0;">
+          ${icon('open', 14)} Spine spreadsheet
         </a>
-        <a href="https://drive.google.com/drive/folders/${getDriveFolderId()}" target="_blank" class="link" style="display: flex; align-items: center; gap: 8px;">
-          ${icon('open', 14)} Open Drive folder
+        <a href="https://drive.google.com/drive/folders/${getDriveFolderId()}" target="_blank" class="link" style="display: flex; align-items: center; gap: 8px; padding: 8px 0;">
+          ${icon('open', 14)} Spine Drive folder
         </a>
-        <a href="https://calendar.google.com/calendar/u/0/r" target="_blank" class="link" style="display: flex; align-items: center; gap: 8px;">
-          ${icon('open', 14)} Open Google Calendar
+        <a href="https://calendar.google.com/calendar/u/0/r" target="_blank" class="link" style="display: flex; align-items: center; gap: 8px; padding: 8px 0;">
+          ${icon('open', 14)} Google Calendar
         </a>
       </div>
     </div>
@@ -117,7 +111,14 @@ export async function render(view) {
       const sheetId = getSheetId();
       const today = new Date().toISOString().slice(0, 10);
       await appendRow(sheetId, 'Brain Dumps', [today, text, JSON.stringify(items), 'Pasted', '']);
-      msg.innerHTML = `<div class="success">Parsed ${items.length} item${items.length !== 1 ? 's' : ''}. Now <a href="#/sunday" class="link">run Sunday Decision</a> to triage them.</div>`;
+      // Also push items to Triage as inbox so they show up everywhere
+      for (const it of items) {
+        const id = `paste-${Date.now()}-${Math.random().toString(36).slice(2,5)}`;
+        await appendRow(sheetId, 'Triage', [
+          id, today, it.text, '', it.domain || 'Other', '', '', '', 'inbox', new Date().toISOString()
+        ]).catch(() => {});
+      }
+      msg.innerHTML = `<div class="success">Parsed ${items.length} item${items.length !== 1 ? 's' : ''} into your inbox.</div>`;
       document.getElementById('paste-text').value = '';
     } catch (err) {
       msg.innerHTML = `<div class="error">${err.message}</div>`;
@@ -126,4 +127,19 @@ export async function render(view) {
       btn.innerHTML = `${icon('paste', 16)} Ingest into brain dump`;
     }
   });
+}
+
+function linkRow(route, iconName, title, subtitle) {
+  return `
+    <a href="#/${route}" class="link" style="display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--sand); text-decoration: none; color: inherit;">
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <span style="color: var(--sage);">${icon(iconName, 18)}</span>
+        <div>
+          <div style="color: var(--ink); font-weight: 500;">${title}</div>
+          <div class="faint" style="margin-top: 2px;">${subtitle}</div>
+        </div>
+      </div>
+      <span style="color: var(--ink-faint);">${icon('arrow', 16)}</span>
+    </a>
+  `;
 }

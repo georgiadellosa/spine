@@ -2,7 +2,7 @@ import { withFreshToken } from './auth.js';
 
 const API = 'https://sheets.googleapis.com/v4/spreadsheets';
 
-const TABS = [
+export const TABS = [
   { name: 'Weekly Priorities', headers: ['Week Start', 'Domain', 'Priority', 'Status', 'Created', 'Last Updated', 'Note'] },
   { name: 'Daily Check-in', headers: ['Date', 'Day Type', 'Capacity AM', 'Capacity PM', "Today's Priority", 'Free Time Today', 'Priority Outcome', 'Win Logged', 'Voice Memo URL', 'Created'] },
   { name: 'Weekly Close', headers: ['Week Ending', 'Shipped', 'Stuck', 'Moves Next Week', 'Mood', 'Note', 'Created'] },
@@ -13,6 +13,8 @@ const TABS = [
   { name: 'Capacity Log', headers: ['Date', 'Capacity AM', 'Capacity PM', 'Sleep Hours', 'Day Type', 'Notes'] },
   { name: 'Parking Lot', headers: ['Parked Date', 'Project', 'Future Me Note', 'Status', 'Last Reviewed'] }
 ];
+
+export const TAB_SHEET_IDS = TABS.reduce((acc, t, i) => { acc[t.name] = i; return acc; }, {});
 
 const QUARTERLY_SPINE_SEED = [
   ['2026 Q3', 'PhD', 'Paper 3 submitted', '2026-09-30', 'On Track', '', ''],
@@ -38,10 +40,7 @@ export async function createSpineSheet() {
     if (!createRes.ok) throw new Error(`Sheet create: ${await createRes.text()}`);
     const sheet = await createRes.json();
     const spreadsheetId = sheet.spreadsheetId;
-    const data = TABS.map(tab => ({
-      range: `${tab.name}!A1`,
-      values: [tab.headers]
-    }));
+    const data = TABS.map(tab => ({ range: `${tab.name}!A1`, values: [tab.headers] }));
     data.push({ range: 'Quarterly Spine!A2', values: QUARTERLY_SPINE_SEED });
     const updateRes = await fetch(`${API}/${spreadsheetId}/values:batchUpdate`, {
       method: 'POST',
@@ -86,6 +85,33 @@ export async function updateRow(spreadsheetId, tabName, rowIndex, row) {
       body: JSON.stringify({ values: [row] })
     });
     if (!res.ok) throw new Error(`Update: ${await res.text()}`);
+    return res.json();
+  });
+}
+
+export async function deleteRow(spreadsheetId, tabName, rowIndex) {
+  // rowIndex is 1-based (header at row 1; first data row at row 2)
+  const sheetId = TAB_SHEET_IDS[tabName];
+  if (sheetId === undefined) throw new Error(`Unknown tab: ${tabName}`);
+  return withFreshToken(async (token) => {
+    const url = `${API}/${spreadsheetId}:batchUpdate`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        requests: [{
+          deleteDimension: {
+            range: {
+              sheetId,
+              dimension: 'ROWS',
+              startIndex: rowIndex - 1,
+              endIndex: rowIndex
+            }
+          }
+        }]
+      })
+    });
+    if (!res.ok) throw new Error(`Delete: ${await res.text()}`);
     return res.json();
   });
 }

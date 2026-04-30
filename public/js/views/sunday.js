@@ -1,21 +1,45 @@
-import { appendRow } from '../google-sheets.js';
+import { appendRow, getRows, updateRow } from '../google-sheets.js';
 import { getDriveFolderId, getSheetId } from '../store.js';
 import { uploadAudioToDrive } from '../google-drive.js';
 import { whisperTranscribe, parseBrainDump } from '../api.js';
 import { icon } from '../icons.js';
 
-let state = { items: [], decisions: [], rawText: '', source: 'Text' };
+let state = { items: [], decisions: [], rawText: '', source: 'Text', preExisting: [] };
 
 export async function render(view) {
-  state = { items: [], decisions: [], rawText: '', source: 'Text' };
+  state = { items: [], decisions: [], rawText: '', source: 'Text', preExisting: [] };
+  // Pull any inbox/resurfaced items first
+  await loadPreExisting();
   showBrainDump(view);
 }
 
+async function loadPreExisting() {
+  try {
+    const sheetId = getSheetId();
+    const rows = await getRows(sheetId, 'Triage');
+    const today = new Date().toISOString().slice(0, 10);
+    const all = rows.slice(1).map((r, i) => ({ row: r, rowIndex: i + 2 }));
+    const inbox = all.filter(({ row }) => row[8] === 'inbox');
+    const resurfacing = all.filter(({ row }) =>
+      row[3] === 'Delay' && row[5] && row[5] <= today && row[8] !== 'resurfaced');
+    state.preExisting = [...inbox, ...resurfacing];
+  } catch (err) {
+    console.warn('Could not load pre-existing triage', err);
+  }
+}
+
 function showBrainDump(view) {
+  const preCount = state.preExisting.length;
   view.innerHTML = `
     <div class="eyebrow">Step 1 of 3</div>
     <h1>Brain dump</h1>
     <p class="subtitle">Get it all out. Don't filter.</p>
+
+    ${preCount > 0 ? `
+      <div class="info" style="margin-bottom: 16px;">
+        ${preCount} item${preCount !== 1 ? 's' : ''} from your inbox and delayed items will be included in triage.
+      </div>
+    ` : ''}
 
     <div class="field">
       <textarea id="dump" placeholder="Work, life, kids, body, money — anything taking up space. One thought per line if it helps." autofocus></textarea>
@@ -39,8 +63,8 @@ function showBrainDump(view) {
 
   document.getElementById('next').addEventListener('click', async () => {
     const text = document.getElementById('dump').value.trim();
-    if (!text) {
-      document.getElementById('msg').innerHTML = `<div class="error">Add some text or record voice first</div>`;
+    if (!text && state.preExisting.length === 0) {
+      document.getElementById('msg').innerHTML = `<div class="error">Add some text, record voice, or capture some items in your inbox first</div>`;
       return;
     }
     state.rawText = text;
@@ -48,12 +72,27 @@ function showBrainDump(view) {
     btn.disabled = true;
     btn.innerHTML = 'Parsing… <div class="spinner" style="width: 16px; height: 16px; margin-left: 8px;"></div>';
     try {
-      const result = await parseBrainDump(text);
-      state.items = result.items || [];
-      const sheetId = getSheetId();
-      const today = new Date().toISOString().slice(0, 10);
-      await appendRow(sheetId, 'Brain Dumps', [today, text, JSON.stringify(state.items), state.source, '']);
-      state.decisions = state.items.map(item => ({ item, decision: null, resurfaceDate: '', delegateTo: '', dropReason: '' }));
+      let parsedItems = [];
+      if (text) {
+        const result = await parseBrainDump(text);
+        parsedItems = result.items || [];
+        const sheetId = getSheetId();
+        const today = new Date().toISOString().slice(0, 10);
+        await appendRow(sheetId, 'Brain Dumps', [today, text, JSON.stringify(parsedItems), state.source, '']);
+      }
+      state.items = parsedItems;
+
+      const preDecisions = state.preExisting.map(({ row, rowIndex }) => ({
+        item: { text: row[2], domain: row[4] || 'Other' },
+        decision: null, resurfaceDate: '', delegateTo: '', dropReason: '',
+        preExistingRowIndex: rowIndex
+      }));
+      const newDecisions = parsedItems.map(item => ({
+        item, decision: null, resurfaceDate: '', delegateTo: '', dropReason: '',
+        preExistingRowIndex: null
+      }));
+      state.decisions = [...preDecisions, ...newDecisions];
+
       if (state.decisions.length === 0) {
         showPickThree(view);
       } else {
@@ -203,13 +242,30 @@ async function recordTriage(idx) {
     const sheetId = getSheetId();
     const d = state.decisions[idx];
     const today = new Date().toISOString().slice(0, 10);
-    const id = `${today}-${idx}-${Math.random().toString(36).slice(2, 6)}`;
-    await appendRow(sheetId, 'Triage', [
-      id, today, d.item.text, d.decision, d.item.domain,
-      d.resurfaceDate || '', d.delegateTo || '', d.dropReason || '',
-      d.decision === 'Delegate' ? 'needs sending' : (d.decision === 'Do' ? 'pending' : ''),
-      new Date().toISOString()
-    ]);
+    const status = d.decision === 'Delegate' ? 'needs sending'
+                 : d.decision === 'Do' ? 'pending'
+                 : d.decision === 'Drop' ? 'dropped'
+                 : d.decision === 'Delay' ? 'delayed'
+                 : '';
+
+    if (d.preExistingRowIndex) {
+      const rows = await getRows(sheetId, 'Triage');
+      const existing = rows[d.preExistingRowIndex - 1] ? [...rows[d.preExistingRowIndex - 1]] : [];
+      while (existing.length < 10) existing.push('');
+      existing[3] = d.decision;
+      existing[5] = d.resurfaceDate || '';
+      existing[6] = d.delegateTo || '';
+      existing[7] = d.dropReason || '';
+      existing[8] = status;
+      await updateRow(sheetId, 'Triage', d.preExistingRowIndex, existing);
+    } else {
+      const id = `${today}-${idx}-${Math.random().toString(36).slice(2, 6)}`;
+      await appendRow(sheetId, 'Triage', [
+        id, today, d.item.text, d.decision, d.item.domain,
+        d.resurfaceDate || '', d.delegateTo || '', d.dropReason || '',
+        status, new Date().toISOString()
+      ]);
+    }
   } catch (err) {
     console.warn('Triage save failed', err);
   }
